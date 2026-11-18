@@ -3,4 +3,5 @@ dist/
 *.wgt
 *.p12
 *.pwd
+__pycache__/
 .DS_Store

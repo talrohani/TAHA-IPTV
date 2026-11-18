@@ -52,6 +52,7 @@ def pack():
     if not os.path.exists(os.path.join(DIST, 'index.html')):
         sys.exit('Build it first: npm run build')
     sys.path.insert(0, HERE)
+    sys.dont_write_bytecode = True   # no __pycache__ in the project
     import compat   # stops here if the build uses what the AU7000's Chromium 76 can't run
     compat.main()
     with zipfile.ZipFile(WGT, 'w', zipfile.ZIP_DEFLATED) as z:
