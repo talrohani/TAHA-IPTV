@@ -13,6 +13,10 @@ import { isFavorite, toggleFavorite, progress } from '../data/library';
 import { openItem } from './nav';
 import type { Screen } from '../core/router';
 import type { Episode, Movie, Season, Series } from '../data/types';
+import { getSettings } from '../core/store';
+
+/** Settings > Auto-resume: start where it was left, without asking. */
+const autoResume = (): boolean => getSettings().autoResume;
 
 export function details(params?: Record<string, unknown>): Screen {
   let item = (params && params.item) as Movie | Series;
@@ -57,7 +61,10 @@ export function details(params?: Record<string, unknown>): Screen {
       if (back.getAttribute('src') !== full.backdrop) { back.style.visibility = ''; back.src = full.backdrop; }
       if (poster.getAttribute('src') !== full.poster) poster.src = full.poster;
       drawFacts();
+      // The buttons are drawn again: the focus moves to the new first one if it was on the old ones.
+      const f = focused(), wasHere = !f || actions.contains(f) || !document.body.contains(f);
       drawActions();
+      if (wasHere) focus(firstBtn);
     }, () => { /* the list's facts stay */ });
   }
 
@@ -84,17 +91,20 @@ export function details(params?: Record<string, unknown>): Screen {
       if (resumable) {
         resumeLine.appendChild(h('div', { cls: 'progress' }, [h('i', { style: { width: (p!.pos / item.duration * 100).toFixed(1) + '%' } })]));
         resumeLine.appendChild(h('span', { text: t('remaining', { t: hms(item.duration - p!.pos) }) }));
-        firstBtn = button(t('resume'), 'play', () => open('player', { item, startAt: p!.pos }), 'primary');
+        // Auto-resume on: Resume comes first; off: From the start does, and Resume stays one step away.
+        const resumeBtn = button(t('resume'), 'play', () => open('player', { item, startAt: p!.pos }), autoResume() ? 'primary' : undefined);
+        const startBtn = button(t('fromStart'), 'rewind', () => open('player', { item, startAt: 0 }), autoResume() ? undefined : 'primary');
+        firstBtn = autoResume() ? resumeBtn : startBtn;
         actions.appendChild(firstBtn);
-        actions.appendChild(button(t('fromStart'), 'rewind', () => open('player', { item, startAt: 0 })));
+        actions.appendChild(firstBtn === resumeBtn ? startBtn : resumeBtn);
       } else {
         firstBtn = button(t('watchNow'), 'play', () => open('player', { item, startAt: 0 }), 'primary');
         actions.appendChild(firstBtn);
       }
     } else {
-      const next = nextEpisode();
-      firstBtn = button(next ? (next.pos ? t('resume') : t('watchNow')) + ' · ' + t('seasonEpisode', { s: next.ep.season, e: next.ep.num }) : t('watchNow'), 'play', () => {
-        if (next) open('player', { item: next.ep, series: item, startAt: next.pos });
+      const next = nextEpisode(), pos = next && autoResume() ? next.pos : 0;
+      firstBtn = button(next ? (pos ? t('resume') : t('watchNow')) + ' · ' + t('seasonEpisode', { s: next.ep.season, e: next.ep.num }) : t('watchNow'), 'play', () => {
+        if (next) open('player', { item: next.ep, series: item, startAt: pos });
       }, 'primary');
       actions.appendChild(firstBtn);
     }
@@ -130,7 +140,7 @@ export function details(params?: Record<string, unknown>): Screen {
       const frame = h('div', { cls: 'ep-img' }, [img,
         watched ? h('span', { cls: 'watched', html: icon('check') }) : null,
         p && !watched ? h('div', { cls: 'progress' }, [h('i', { style: { width: (p.pos / e.duration * 100).toFixed(1) + '%' } })]) : null]);
-      return h('div', { cls: 'ep-card', focus: true, onOk: () => open('player', { item: e, series: item, startAt: p && !watched ? p.pos : 0 }) }, [
+      return h('div', { cls: 'ep-card', focus: true, onOk: () => open('player', { item: e, series: item, startAt: p && !watched && autoResume() ? p.pos : 0 }) }, [
         frame,
         h('div', { cls: 'ep-body' }, [h('div', { cls: 'ep-title', text: e.num + '. ' + e.name }),
           h('div', { cls: 'ep-meta', text: t('minutes', { n: Math.round(e.duration / 60000) }) + (watched ? ' · ' + t('watched') : '') }),

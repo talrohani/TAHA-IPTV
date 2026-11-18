@@ -44,6 +44,8 @@ const AR = {
   storeKind: 'حفظ كلمة المرور', keymanager: 'مخزن Tizen الآمن', appStore: 'مساحة التطبيق الخاصة', maxConnections: 'الاتصالات المسموحة',
   loadFailed: 'تعذّر تحميل القائمة', demoAccount: 'الحساب التجريبي', signOut: 'تسجيل الخروج', removeConfirm: 'حذف هذا الحساب من التلفزيون؟',
   connectedAs: 'متصل: {u}',
+  reconnecting: 'انقطع البث، جارٍ إعادة الاتصال...', trackN: 'المسار {n}', noTracks: 'لا توجد مسارات أخرى في هذا البث',
+  notHere: 'غير متاح في هذا البث', codec: 'الترميز', video: 'الصورة',
 };
 
 type Dict = typeof AR;
@@ -88,6 +90,8 @@ const EN: Dict = {
   storeKind: 'Password storage', keymanager: 'Tizen secure store', appStore: "App's private storage", maxConnections: 'Connections allowed',
   loadFailed: "The list couldn't be loaded", demoAccount: 'Demo account', signOut: 'Sign out', removeConfirm: 'Remove this account from the TV?',
   connectedAs: 'Connected: {u}',
+  reconnecting: 'The stream dropped, reconnecting...', trackN: 'Track {n}', noTracks: 'This stream has no other tracks',
+  notHere: 'Not available for this stream', codec: 'Codec', video: 'Picture',
 };
 
 const ERRORS: Record<string, [string, string]> = {

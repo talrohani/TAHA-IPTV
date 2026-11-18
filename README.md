@@ -4,11 +4,31 @@ A fast Xtream Codes player for Samsung Tizen TVs (built for the AU7000, Tizen 6.
 English as an option. Plain TypeScript and CSS, no UI framework; Vite builds it into one classic script that runs on
 the TV's Chromium 76 from the `.wgt` package.
 
-## Status: phase 2 (Xtream Codes) — waiting for review
+## Status: phase 3 (playback) — waiting for review
 
-Phase 1 (every screen, demo data, remote navigation) was approved. Phase 2 connects the screens to a real
-Xtream Codes account. Not started yet, by plan: Samsung AVPlay (phase 3), persistence and EPG tuning (phase 4),
-the Tizen package (phase 5).
+Phases 1 (screens) and 2 (Xtream Codes) were approved. Phase 3 plays the streams: Samsung AVPlay on the TV,
+HTML5 video in a browser. Not started yet, by plan: persistence and EPG tuning (phase 4), the Tizen package (phase 5).
+
+### Playback (`src/playback/`)
+
+- `player.ts`: one player for the app, a state machine (IDLE → PREPARING → READY → PLAYING ⇄ PAUSED, BUFFERING,
+  ERROR, ENDED) over an engine. Each play() is a session: an older stream's late events are dropped. It gives up on
+  a start after 20 s and on buffering that hasn't moved for 30 s; a live channel that drops is opened again after
+  2 s (twice; a format the TV can't play is never retried); one seek at a time, the newest target kept.
+- `avplay.ts`: Samsung AVPlay. open → listener → buffering (Settings › Buffering) → 4K mode for 4K films →
+  display rectangle → prepareAsync → seek to the resume point → play. Audio and subtitle tracks
+  (`getTotalTrackInfo`, `setSelectTrack`); subtitles come to the page as text (`onsubtitlechange`) and the player
+  draws them (Settings › Subtitle size). Picture: letterbox or fill. Every AVPlay call is guarded.
+- `matte.ts`: AVPlay draws under the whole page, so on the TV the page is transparent and four panels paint the
+  background around the picture (the live preview's box, or the full screen).
+- `tizen.ts`: loads `$WEBAPIS/webapis/webapis.js` only on a TV; the screensaver is off while something plays; the
+  stream is suspended when the app goes to the background and restored after (a live channel is opened again).
+- `html5.ts`: the browser's engine (no track switching there; speed 0.5–2×, which AVPlay only offers without sound).
+- Resume: Settings › Auto-resume puts Resume (or From the start) first on a film's page and decides whether episode
+  cards start where they were left. A resume point within 10 s of the stream's real end is ignored (a provider's
+  listed length can be wrong). Your default audio and subtitle languages are picked when a stream starts.
+
+### Phase 2: how the app talks to the server (`src/data/xtream/`)
 
 ### How the app talks to the server (`src/data/xtream/`)
 
@@ -29,11 +49,15 @@ the Tizen package (phase 5).
 
 ### Tested
 
-- Unit tests: response normalizers (odd shapes above), addresses, focus geometry, time formats.
-- In the browser, against a local stand-in server: sign-in (valid, wrong password, expired, HTML answer,
-  unreachable, timeout), 6,000 channels, categories, guide, films, film details, series seasons, search, saved
-  account at start, server down at start and mid-session, Try again.
-- Not yet on the TV: real providers, Key Manager, and playback (phase 3).
+- Unit tests (32): the player's states, stale events, start and stall timeouts, live reconnects, seek queue,
+  background and back; AVPlay's call order, resume seek, late prepares, tracks, subtitles, errors (against a
+  stand-in for `webapis.avplay`); response normalizers; addresses, focus geometry, time formats.
+- In the browser (HTML5 engine, demo streams): live preview inside its box, full screen and back to the preview,
+  film resume, seek bar (choose a point, OK), speed, info (real resolution), leaving saves the position. Phase 2's
+  sign-in, lists, search and error cases against a local stand-in server.
+- Not yet on the TV: AVPlay itself (the picture under the page, tracks, subtitles, 4K, suspend/restore), real
+  providers' streams and Key Manager. The AU7000 decodes H.264 and HEVC in HLS and MPEG-TS; which of a provider's
+  streams play depends on their formats.
 
 | Screen | What's there |
 | --- | --- |

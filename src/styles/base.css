@@ -16,6 +16,10 @@ img { display: block; }
 .screen { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; }
 .video-host { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; z-index: 0; }
 .video-plane { position: absolute; background: #000; object-fit: contain; }
+/* The picture under the page (AVPlay): nothing may paint over it but the matte around it (playback/matte.ts). */
+.plane-under, .plane-under body, .plane-under #stage { background: transparent; }
+.video-plane.avplay { background: transparent; }
+.matte { position: absolute; background: var(--bg); }
 .screen, .dialog-layer { z-index: 1; }
 
 .ic-wrap { display: inline-flex; align-items: center; justify-content: center; }

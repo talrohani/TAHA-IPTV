@@ -105,7 +105,7 @@ export function settings(params?: Record<string, unknown>): Screen {
       } },
       { ic: 'info', label: 'platform', info: true, value: () => (/Tizen\s[\d.]+/.exec(navigator.userAgent) || ['Browser'])[0] },
       { ic: 'key', label: 'storeKind', info: true, value: () => storeKind() === 'keymanager' ? t('keymanager') : t('appStore') },
-      { ic: 'info', label: 'version', info: true, value: () => '0.2.0 (phase 2)' },
+      { ic: 'info', label: 'version', info: true, value: () => '0.3.0 (phase 3)' },
     ];
   }
 

@@ -159,6 +159,7 @@ export function live(params?: Record<string, unknown>): Screen {
   function pick(c: Channel): void {
     if (playing && playing.id === c.id) { full(c); return; }
     playing = c;
+    preview.classList.add('on');
     pMsg.textContent = t('loading');
     app.player.play(app.source.streamUrl(c), { rect: PREVIEW, live: true });
     record(c, 0, 0);
@@ -185,7 +186,7 @@ export function live(params?: Record<string, unknown>): Screen {
 
   const off = app.player.on((s, info) => {
     if (!playing) return;
-    pMsg.textContent = s === 'PREPARING' || s === 'BUFFERING' ? t('loading') : s === 'ERROR' ? errorText(info.error) : '';
+    pMsg.textContent = info.retrying ? t('reconnecting') : s === 'PREPARING' || s === 'BUFFERING' ? t('loading') : s === 'ERROR' ? errorText(info.error) : '';
   });
 
   function loadCategories(): void {

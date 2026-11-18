@@ -9,7 +9,9 @@ import { registerTizenKeys, keyOf } from './core/keys';
 import { applyDirection } from './core/i18n';
 import { init, register, back, screenKey } from './core/router';
 import { move, componentKey, activate } from './core/focus';
-import { onSettings } from './core/store';
+import { onSettings, getSettings } from './core/store';
+import { loadWebapis, pickEngine, screensaver, followVisibility } from './playback/tizen';
+import { createMatte } from './playback/matte';
 import { app } from './app';
 import { resume } from './session';
 import { home } from './screens/home';
@@ -37,12 +39,6 @@ applyDirection();
 applyLook();
 onSettings(() => applyLook());
 registerTizenKeys();
-
-// The video plane sits under the screens (on the TV, AVPlay draws behind the page).
-const videoHost = document.createElement('div');
-videoHost.className = 'video-host';
-stage.appendChild(videoHost);
-app.player.attach(videoHost);
 
 init(stage);
 register('home', home);
@@ -79,4 +75,16 @@ document.addEventListener('keydown', (e) => {
   if (key === 'back') back();
 });
 
-resume();
+// The video plane sits under the screens. On the TV, AVPlay draws behind the whole page: the page turns transparent
+// and the matte paints the background everywhere but the picture. Then the session starts (the saved account).
+loadWebapis(() => {
+  pickEngine(app.player);
+  const videoHost = document.createElement('div');
+  videoHost.className = 'video-host';
+  stage.insertBefore(videoHost, stage.firstChild);
+  app.player.attach(videoHost);
+  app.player.use({ matte: createMatte(videoHost), screensaver, buffer: () => getSettings().buffer });
+  if (app.player.engineName !== 'HTML5') document.documentElement.classList.add('plane-under');
+  followVisibility(app.player);
+  resume();
+});

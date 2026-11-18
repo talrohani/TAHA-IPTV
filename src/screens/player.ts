@@ -19,8 +19,14 @@ import type { Screen } from '../core/router';
 import type { Channel, Episode, Movie, Program, Series } from '../data/types';
 import type { Key } from '../core/keys';
 import type { Track } from '../playback/player';
+import { isLang, langName } from '../playback/lang';
 
 const FULL = { x: 0, y: 0, w: 1920, h: 1080 };
+
+function trackName(tr: Track, i: number): string {
+  const n = langName(tr.lang);
+  return n === 'ar' ? t('trackAr') : n === 'en' ? t('trackEn') : n || t('trackN', { n: i + 1 });
+}
 const HIDE_AFTER = 5000;
 
 type Playable = Channel | Movie | Episode;
@@ -50,6 +56,19 @@ export function player(params?: Record<string, unknown>): Screen {
 
   const spinner = h('div', { cls: 'spinner' }, [h('i'), h('span', { text: t('loading') })]);
   el.appendChild(spinner);
+
+  // Subtitles: AVPlay hands each line to the page, which draws it (above the controls while they show).
+  const subs = h('div', { cls: 'subs size-' + getSettings().subtitleSize }, [h('span')]);
+  el.insertBefore(subs, ov);
+  let subTimer: ReturnType<typeof setTimeout> | 0 = 0;
+  const offText = p.onText((text, ms) => {
+    const line = subs.firstChild as HTMLElement;
+    line.textContent = text.replace(/<[^>]+>/g, '');   // tags some streams carry (<i>, <font>): text only
+    subs.classList.toggle('on', !!line.textContent);
+    if (subTimer) clearTimeout(subTimer);
+    subTimer = setTimeout(() => subs.classList.remove('on'), Math.max(500, Math.min(ms, 15000)));
+  });
+  function clearSubs(): void { subs.classList.remove('on'); if (subTimer) clearTimeout(subTimer); }
 
   // Side arrows: previous / next episode or channel
   const prevBtn = h('div', { cls: 'side-arrow prev', focus: true, onOk: () => step(-1), html: icon('chevronL') });
@@ -122,9 +141,8 @@ export function player(params?: Record<string, unknown>): Screen {
       name.textContent = (item.num ? item.num + '  ' : '') + item.name;
       metaText.textContent = t('liveChannels');
     }
-    const q = item.kind === 'movie' ? item.quality : item.kind === 'episode' ? (series ? series.quality : 'HD') : item.hd ? 'HD' : 'SD';
-    metaBadge.textContent = q;
-    (corner.firstChild as HTMLElement).textContent = q === '4K' ? '2160p 4K' : q === 'HD' ? '1080p FHD' : '576p SD';
+    metaBadge.textContent = quality();
+    drawResolution();
     panel.style.display = live ? 'none' : '';
     liveInfo.style.display = live ? '' : 'none';
     prevBtn.style.display = nextBtn.style.display = live ? (list.length > 1 ? '' : 'none') : item.kind === 'episode' ? '' : 'none';
@@ -132,6 +150,18 @@ export function player(params?: Record<string, unknown>): Screen {
     (controls.querySelector('.episodes') as HTMLElement).style.display = item.kind === 'episode' ? '' : 'none';
     drawFav();
     if (live) loadEpg();
+  }
+
+  function quality(): string {
+    return item.kind === 'movie' ? item.quality : item.kind === 'episode' ? (series ? series.quality : 'HD') : item.hd ? 'HD' : 'SD';
+  }
+
+  /** The corner: the picture's real size once it plays, else what the list says. */
+  function drawResolution(): void {
+    const v = p.videoInfo(), hgt = v ? v.height : 0, q = quality();
+    (corner.firstChild as HTMLElement).textContent = hgt
+      ? hgt + 'p ' + (hgt >= 2000 ? '4K' : hgt >= 1000 ? 'FHD' : hgt >= 700 ? 'HD' : 'SD')
+      : q === '4K' ? '2160p 4K' : q === 'HD' ? '1080p FHD' : '576p SD';
   }
 
   function drawFav(): void {
@@ -157,8 +187,12 @@ export function player(params?: Record<string, unknown>): Screen {
   function start(startAt: number): void {
     errBox.classList.remove('on');
     cancelSeek();
+    clearSubs();
+    prefsDone = false;
     describe();
-    p.play(app.source.streamUrl(item), { rect: FULL, live: isLive(), startAt });
+    p.play(app.source.streamUrl(item), { rect: FULL, live: isLive(), startAt, uhd: quality() === '4K' });
+    if (speed !== 1) speed = 1;
+    if (aspect === 'fill') p.setFill(true);
     record(item, startAt, item.kind === 'live' ? 0 : item.duration, series);
   }
 
@@ -184,8 +218,9 @@ export function player(params?: Record<string, unknown>): Screen {
     const st = p.state;
     playIcon.innerHTML = icon(st === 'PAUSED' || st === 'READY' ? 'play' : 'pause');
     spinner.classList.toggle('on', st === 'PREPARING' || st === 'BUFFERING' || busy);
-    (spinner.lastChild as HTMLElement).textContent = busy ? t('seeking') : t('loading');
+    (spinner.lastChild as HTMLElement).textContent = busy ? t('seeking') : retrying ? t('reconnecting') : t('loading');
     (corner.lastChild as HTMLElement).textContent = clock(new Date());
+    if (st === 'PLAYING') drawResolution();   // adaptive streams change quality as they go
     if (isLive()) { drawLive(); return; }
     const d = p.duration(), shownPos = busy && pending !== null ? pending : p.time();
     const bar = hasBar();
@@ -302,18 +337,47 @@ export function player(params?: Record<string, unknown>): Screen {
   }
 
   function demoTracks(kind: 'audio' | 'text'): Track[] {
-    return kind === 'audio' ? [{ id: 'a1', label: t('trackAr'), lang: 'ar' }, { id: 'a2', label: t('trackEn'), lang: 'en' }]
-      : [{ id: 't1', label: t('trackAr'), lang: 'ar' }, { id: 't2', label: t('trackEn'), lang: 'en' }];
+    return kind === 'audio' ? [{ id: 'a1', label: '', lang: 'ar' }, { id: 'a2', label: '', lang: 'en' }]
+      : [{ id: 't1', label: '', lang: 'ar' }, { id: 't2', label: '', lang: 'en' }];
   }
-  let audioSel = 'a1', textSel: string | null = getSettings().subtitles === 'off' ? null : 't1';
+  function tracks(kind: 'audio' | 'text'): Track[] {
+    const real = kind === 'audio' ? p.audioTracks() : p.textTracks();
+    return real.length ? real : demo ? demoTracks(kind) : [];
+  }
+  let audioSel: string | null = null, textSel: string | null = null, prefsDone = false;
+
+  /** Your language preferences (Settings > Playback), once per stream, as soon as it plays and lists its tracks. */
+  function applyPrefs(): void {
+    if (prefsDone) return;
+    prefsDone = true;
+    const s = getSettings(), a = tracks('audio'), x = tracks('text');
+    audioSel = p.currentAudio() || (a[0] ? a[0].id : null);
+    const al = s.audioLang, sl = s.subtitles;
+    if (al !== 'auto') {
+      const want = a.find((tr) => isLang(tr.lang, al));
+      if (want && want.id !== audioSel && p.setAudio(want.id)) audioSel = want.id;
+    }
+    textSel = null;
+    if (sl !== 'off') {
+      const want = x.find((tr) => isLang(tr.lang, sl)) || null;
+      if (want && (p.setText(want.id) || demo)) textSel = want.id;
+    }
+  }
 
   function trackSheet(kind: 'audio' | 'text'): void {
-    const real = kind === 'audio' ? p.audioTracks() : p.textTracks();
-    const list2 = real.length ? real : demo ? demoTracks(kind) : [];
-    const rows = list2.map((tr) => ({ label: tr.label, on: kind === 'audio' ? audioSel === tr.id : textSel === tr.id,
-      run: () => { if (kind === 'audio') { audioSel = tr.id; p.setAudio(tr.id); } else { textSel = tr.id; p.setText(tr.id); } closeDialog(); toast(tr.label); } }));
-    if (kind === 'text') rows.unshift({ label: t('trackOff'), on: textSel === null, run: () => { textSel = null; p.setText(null); closeDialog(); toast(t('trackOff')); } });
-    if (!rows.length) { toast(t('trackOff')); return; }
+    const list2 = tracks(kind);
+    if (kind === 'audio' && list2.length < 2) { toast(t('noTracks')); return; }
+    if (kind === 'text' && !list2.length) { toast(t('notHere')); return; }
+    const rows = list2.map((tr, i) => ({ label: trackName(tr, i), end: tr.detail || undefined,
+      on: kind === 'audio' ? audioSel === tr.id : textSel === tr.id,
+      run: () => {
+        const ok = kind === 'audio' ? p.setAudio(tr.id) || demo : p.setText(tr.id) || demo;
+        if (ok) { if (kind === 'audio') audioSel = tr.id; else textSel = tr.id; }
+        closeDialog();
+        toast(ok ? trackName(tr, i) : t('notHere'));
+      } }));
+    if (kind === 'text') rows.unshift({ label: t('trackOff'), end: undefined, on: textSel === null,
+      run: () => { textSel = null; p.setText(null); clearSubs(); closeDialog(); toast(t('trackOff')); } });
     sheet(kind === 'audio' ? 'headphones' : 'cc', kind === 'audio' ? t('audio') : t('subtitles'), rows);
   }
 
@@ -340,23 +404,40 @@ export function player(params?: Record<string, unknown>): Screen {
     } else {
       rows.push({ label: t('channels'), end: item.name, run: noop }, { label: '#', end: String(item.num), run: noop });
     }
+    const v = p.videoInfo();
+    if (v) rows.push({ label: t('video'), end: v.width + ' × ' + v.height + (v.codec ? ' · ' + v.codec : ''), run: noop });
     rows.push({ label: t('engine'), end: p.engineName, run: noop });
     sheet('info', t('info'), rows);
   }
 
   let speed = 1, aspect: 'normal' | 'fill' = 'normal';
   function settingsSheet(): void {
-    sheet('settings', t('settings'), [
+    const rows: Array<{ label: string; end?: string; run: () => void }> = [
       { label: t('quality'), end: t('auto'), run: () => toast(t('quality') + ': ' + t('auto')) },
-      { label: t('speed'), end: speed + '×', run: () => { speed = speed >= 2 ? 0.5 : speed + 0.25; const v = document.querySelector('.video-plane') as HTMLVideoElement | null; if (v) v.playbackRate = speed; closeDialog(); settingsSheet(); } },
-      { label: t('aspect'), end: t(aspect), run: () => { aspect = aspect === 'normal' ? 'fill' : 'normal'; const v = document.querySelector('.video-plane') as HTMLVideoElement | null; if (v) v.style.objectFit = aspect === 'fill' ? 'cover' : 'contain'; closeDialog(); settingsSheet(); } },
-    ]);
+    ];
+    // Speed only where the engine plays other speeds with sound, and never on a live channel.
+    const speeds = p.speeds();
+    if (speeds.length > 1 && !isLive()) rows.push({ label: t('speed'), end: speed + '×', run: () => {
+      const next = speeds[(speeds.indexOf(speed) + 1) % speeds.length];
+      if (p.setSpeed(next)) speed = next;
+      closeDialog(); settingsSheet();
+    } });
+    rows.push({ label: t('aspect'), end: t(aspect), run: () => {
+      aspect = aspect === 'normal' ? 'fill' : 'normal';
+      p.setFill(aspect === 'fill');
+      closeDialog(); settingsSheet();
+    } });
+    sheet('settings', t('settings'), rows);
   }
 
   // MARK: player events
 
+  let retrying = false;
   const off = p.on((st, info) => {
+    retrying = !!info.retrying && (st === 'PREPARING' || st === 'BUFFERING');
+    if (st === 'PLAYING') { applyPrefs(); drawResolution(); }
     if (st === 'ERROR') {
+      clearSubs();
       errBox.innerHTML = '';
       errBox.appendChild(h('p', { text: errorText(info.error) }));
       const retry = h('div', { cls: 'btn primary', focus: true, onOk: () => start(isLive() ? 0 : p.time()) }, [h('span', { text: t('pressOk') + ' · ↻' })]);
@@ -380,7 +461,11 @@ export function player(params?: Record<string, unknown>): Screen {
   // MARK: start
 
   describe();
-  if (continuing) { p.place(FULL); record(item, 0, 0); } else start((params && (params.startAt as number)) || 0);
+  if (continuing) {
+    p.place(FULL);
+    record(item, 0, 0);
+    if (p.state === 'PLAYING') { applyPrefs(); drawResolution(); }
+  } else start((params && (params.startAt as number)) || 0);
   tick = window.setInterval(() => { if (uiOn) draw(); }, 1000);
   saveTimer = window.setInterval(saveNow, 15000) as unknown as number;
   armHide();
@@ -427,6 +512,9 @@ export function player(params?: Record<string, unknown>): Screen {
     destroy() {
       saveNow();
       off();
+      offText();
+      clearSubs();
+      if (aspect === 'fill') p.setFill(false);
       clearInterval(tick);
       clearInterval(saveTimer);
       clearTimeout(soonTimer);
