@@ -5,7 +5,7 @@
 import { h, hints, sectionTitle, posterCard, button, chip, toast } from '../ui/components';
 import { icon } from '../ui/icons';
 import { hms, lazyImg } from '../core/dom';
-import { focus } from '../core/focus';
+import { focus, focused } from '../core/focus';
 import { t } from '../core/i18n';
 import { open } from '../core/router';
 import { app } from '../app';
@@ -130,7 +130,10 @@ export function details(params?: Record<string, unknown>): Screen {
     scroll.appendChild(epSection);
     app.source.seriesInfo(item).then((ss) => {
       seasons = ss;
+      // The buttons are drawn again with the episode to continue: the focus moves to the new one.
+      const f = focused(), wasHere = !f || actions.contains(f) || !document.body.contains(f);
       drawActions();
+      if (wasHere) focus(firstBtn);
       const n = nextEpisode();
       drawEpisodes(n ? n.ep.season : (ss[0] ? ss[0].num : 1));
     });

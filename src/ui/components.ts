@@ -25,7 +25,7 @@ export function go(name: string, params?: Record<string, unknown>): void {
 }
 
 export function sidebar(active: string, opts?: { brand?: boolean }): HTMLElement {
-  const nav = h('nav', { cls: 'sidebar', group: 'sidebar' });
+  const nav = h('nav', { cls: 'sidebar', group: 'sidebar', attrs: { 'data-trap': 'v' } });
   if (opts && opts.brand) nav.appendChild(brand('side'));
   for (const [name, label, ic] of NAV) {
     const item = h('div', { cls: 'side-item' + (name === active ? ' on' : ''), focus: true, onOk: () => go(name) }, [iconEl(ic), h('span', { text: t(label) })]);
@@ -40,8 +40,11 @@ export function sidebar(active: string, opts?: { brand?: boolean }): HTMLElement
   return nav;
 }
 
+let brandIds = 0;
 export function brand(kind: 'side' | 'top'): HTMLElement {
-  const mark = h('div', { cls: 'brand-mark', html: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#00A8FF"/><stop offset="1" stop-color="#A855F7"/></linearGradient></defs><path d="M12 6l30 18-30 18z" fill="url(#bm)"/><path d="M12 6l30 18-14 4z" fill="#fff" opacity=".18"/></svg>' });
+  // Its own gradient id: a gradient inside a hidden screen can't paint another screen's logo.
+  const id = 'bm' + ++brandIds;
+  const mark = h('div', { cls: 'brand-mark', html: '<svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#00A8FF"/><stop offset="1" stop-color="#A855F7"/></linearGradient></defs><path d="M12 6l30 18-30 18z" fill="url(#' + id + ')"/><path d="M12 6l30 18-14 4z" fill="#fff" opacity=".18"/></svg>' });
   return h('div', { cls: 'brand ' + kind }, [mark, h('div', { cls: 'brand-text' }, [h('div', { cls: 'brand-name', text: t('appName') }),
     kind === 'side' ? h('div', { cls: 'brand-sub', text: t('appSub') }) : null])]);
 }

@@ -99,7 +99,10 @@ export function move(dir: Dir): boolean {
   const list = focusables();
   if (!current || !layer.contains(current) || !visible(current)) { focus(list[0] || null); return !!list[0]; }
   const from = current.getBoundingClientRect();
-  const others = list.filter((e) => e !== current);
+  // A group with data-trap="v" (a side menu) keeps ↑ ↓ inside it: past its ends, the focus stays.
+  const cg0 = groupOf(current);
+  const trapped = cg0 && (dir === 'up' || dir === 'down') && cg0.getAttribute('data-trap') === 'v';
+  const others = list.filter((e) => e !== current && (!trapped || cg0!.contains(e)));
   const i = best(from, others.map((e) => e.getBoundingClientRect()), dir);
   if (i < 0) return false;
   let target = others[i];
