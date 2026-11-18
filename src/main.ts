@@ -7,7 +7,8 @@ import './styles/base.css';
 import './styles/screens.css';
 import { registerTizenKeys, keyOf } from './core/keys';
 import { applyDirection } from './core/i18n';
-import { init, register, back, screenKey } from './core/router';
+import { init, register, back, screenKey, onScreenGone } from './core/router';
+import { sweepImages } from './core/dom';
 import { move, componentKey, activate } from './core/focus';
 import { onSettings, getSettings } from './core/store';
 import { loadWebapis, pickEngine, screensaver, followVisibility } from './playback/tizen';
@@ -41,6 +42,12 @@ onSettings(() => applyLook());
 registerTizenKeys();
 
 init(stage);
+onScreenGone(sweepImages);
+
+// Memory: expired lists and guides go every 5 minutes, and when the app goes to the background.
+const trim = () => { const s = app.source as unknown as { trimMemory?: () => void }; if (s.trimMemory) s.trimMemory(); };
+setInterval(trim, 5 * 60000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) trim(); });
 register('home', home);
 register('live', live);
 register('library', library);

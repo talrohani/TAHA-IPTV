@@ -9,8 +9,7 @@ import { focus, focused } from '../core/focus';
 import { t } from '../core/i18n';
 import { open } from '../core/router';
 import { app } from '../app';
-import { isFavorite, toggleFavorite, progress } from '../data/library';
-import { openItem } from './nav';
+import { isFavorite, toggleFavorite, progress, partWay } from '../data/library';
 import type { Screen } from '../core/router';
 import type { Episode, Movie, Season, Series } from '../data/types';
 import { getSettings } from '../core/store';
@@ -87,10 +86,13 @@ export function details(params?: Record<string, unknown>): Screen {
     actions.innerHTML = '';
     resumeLine.innerHTML = '';
     if (item.kind === 'movie') {
-      const p = progress('movie', item.id), resumable = p && p.pos > 60000 && p.pos < item.duration - 120000;
+      const p = progress('movie', item.id), resumable = partWay(p);
       if (resumable) {
-        resumeLine.appendChild(h('div', { cls: 'progress' }, [h('i', { style: { width: (p!.pos / item.duration * 100).toFixed(1) + '%' } })]));
-        resumeLine.appendChild(h('span', { text: t('remaining', { t: hms(item.duration - p!.pos) }) }));
+        const len = p!.dur || item.duration;
+        if (len) {
+          resumeLine.appendChild(h('div', { cls: 'progress' }, [h('i', { style: { width: Math.min(100, p!.pos / len * 100).toFixed(1) + '%' } })]));
+          resumeLine.appendChild(h('span', { text: t('remaining', { t: hms(len - p!.pos) }) }));
+        }
         // Auto-resume on: Resume comes first; off: From the start does, and Resume stays one step away.
         const resumeBtn = button(t('resume'), 'play', () => open('player', { item, startAt: p!.pos }), autoResume() ? 'primary' : undefined);
         const startBtn = button(t('fromStart'), 'rewind', () => open('player', { item, startAt: 0 }), autoResume() ? undefined : 'primary');
@@ -120,7 +122,7 @@ export function details(params?: Record<string, unknown>): Screen {
     all.forEach((e, i) => {
       const p = progress('episode', e.id);
       if (!p) return;
-      const done = p.pos >= e.duration - 120000;
+      const done = p.done;
       const cand = done ? (all[i + 1] ? { ep: all[i + 1], pos: 0, at: p.at } : null) : { ep: e, pos: p.pos, at: p.at };
       if (cand && (!best || cand.at > best.at)) best = cand;
     });
@@ -134,16 +136,17 @@ export function details(params?: Record<string, unknown>): Screen {
       seasons.map((s) => chip(t('seasonN', { n: s.num }), null, s.num === season, () => drawEpisodes(s.num))));
     const s = seasons.find((x) => x.num === season) || seasons[0];
     const cards = s.episodes.map((e) => {
-      const p = progress('episode', e.id), watched = !!p && p.pos >= e.duration - 120000;
+      const p = progress('episode', e.id), watched = !!p && p.done, len = p ? p.dur || e.duration : 0;
       const img = h('img', { attrs: { alt: '' } });
       lazyImg(img, e.still);
       const frame = h('div', { cls: 'ep-img' }, [img,
         watched ? h('span', { cls: 'watched', html: icon('check') }) : null,
-        p && !watched ? h('div', { cls: 'progress' }, [h('i', { style: { width: (p.pos / e.duration * 100).toFixed(1) + '%' } })]) : null]);
+        p && !watched && len && p.pos > 0 ? h('div', { cls: 'progress' }, [h('i', { style: { width: Math.min(100, p.pos / len * 100).toFixed(1) + '%' } })]) : null]);
+      const minutes = Math.round((e.duration || len) / 60000);
       return h('div', { cls: 'ep-card', focus: true, onOk: () => open('player', { item: e, series: item, startAt: p && !watched && autoResume() ? p.pos : 0 }) }, [
         frame,
         h('div', { cls: 'ep-body' }, [h('div', { cls: 'ep-title', text: e.num + '. ' + e.name }),
-          h('div', { cls: 'ep-meta', text: t('minutes', { n: Math.round(e.duration / 60000) }) + (watched ? ' · ' + t('watched') : '') }),
+          h('div', { cls: 'ep-meta', text: [minutes ? t('minutes', { n: minutes }) : '', watched ? t('watched') : ''].filter(Boolean).join(' · ') }),
           h('div', { cls: 'ep-plot', text: e.plot })]),
       ]);
     });
@@ -180,7 +183,8 @@ export function details(params?: Record<string, unknown>): Screen {
     if (!similar.length) return;
     more.appendChild(sectionTitle('sparkles', t('topRated')));
     more.appendChild(h('div', { cls: 'track', group: 'similar', attrs: { 'data-scroll': 'x', 'data-pad': '80' } },
-      similar.map((x) => posterCard(x, () => openItem(x)))));
+      // One details page at a time: another title replaces this one (Back still goes to the list it came from).
+      similar.map((x) => posterCard(x, () => open('details', { item: x }, { replace: true })))));
   });
 
   return {

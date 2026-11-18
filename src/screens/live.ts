@@ -10,12 +10,14 @@ import { t, errorText } from '../core/i18n';
 import { open } from '../core/router';
 import { focus } from '../core/focus';
 import { app } from '../app';
-import { isFavorite, toggleFavorite, record } from '../data/library';
+import { isFavorite, toggleFavorite, record, favorites, recent } from '../data/library';
 import type { Screen } from '../core/router';
 import type { Category, Channel, Program } from '../data/types';
 import type { Key } from '../core/keys';
 
 const PREVIEW = { x: 998, y: 138, w: 896, h: 520 };
+/** The two categories that are yours, not the provider's. */
+const FAV = '~fav', RECENT = '~recent';
 
 export function live(params?: Record<string, unknown>): Screen {
   const el = h('div', { cls: 'live fixed' });
@@ -46,7 +48,9 @@ export function live(params?: Record<string, unknown>): Screen {
     make: (r) => {
       r.classList.add('chan-row');
       r.appendChild(h('span', { cls: 'num' }));
-      const lg = h('span', { cls: 'logo' }); lg.appendChild(h('img', { attrs: { alt: '' } })); r.appendChild(lg);
+      const lg = h('span', { cls: 'logo' }), li = h('img', { attrs: { alt: '' } });
+      li.onerror = () => { li.style.visibility = 'hidden'; };   // a provider's dead logo link: the plain tile shows
+      lg.appendChild(li); r.appendChild(lg);
       r.appendChild(h('span', { cls: 'name' }));
       r.appendChild(h('span', { cls: 'star' }));
     },
@@ -54,7 +58,7 @@ export function live(params?: Record<string, unknown>): Screen {
       r.children[0].textContent = ('00' + c.num).slice(-3);
       const img = r.children[1].firstChild as HTMLImageElement;
       const src = c.logo;
-      if (img.getAttribute('src') !== src) img.src = src;
+      if (img.getAttribute('src') !== src) { img.style.visibility = ''; img.src = src; }
       r.children[2].textContent = c.name;
       const fav = isFavorite('live', c.id), star = r.children[3] as HTMLElement;
       star.className = 'star' + (fav ? ' on' : '');
@@ -95,7 +99,6 @@ export function live(params?: Record<string, unknown>): Screen {
   ]));
 
   let playing: Channel | null = null;
-  const epgCache = new Map<number, { at: number; list: Program[] }>();
   let epgFor = 0;
   let destroyed = false;
 
@@ -112,8 +115,18 @@ export function live(params?: Record<string, unknown>): Screen {
     focus(box.querySelector('[data-f]') as HTMLElement);
   }
 
+  /** Favorites and Recently watched: the channels as the provider has them now, in the order they were saved. */
+  function ownList(id: string): Promise<Channel[]> {
+    const saved = id === FAV ? favorites('live') : recent('live');
+    return app.source.channels('*').then((all) => {
+      const byId: Record<number, Channel> = {};
+      for (const ch of all) byId[ch.id] = ch;
+      return saved.map((s) => byId[s.id]).filter((ch): ch is Channel => !!ch);
+    });
+  }
+
   function loadChannels(c: Category): void {
-    app.source.channels(c.id).then((list) => {
+    (c.id === FAV || c.id === RECENT ? ownList(c.id) : app.source.channels(c.id)).then((list) => {
       if (destroyed || cats.item() !== c) return;
       chanMsg.innerHTML = '';
       chanPanel.classList.remove('failed');
@@ -123,14 +136,24 @@ export function live(params?: Record<string, unknown>): Screen {
     }, (err) => { if (!destroyed) fail(err, () => loadChannels(c)); });
   }
 
+  /** The guide comes from the source's own cache (10 min, a limited number of channels, a few requests at a time). */
   function epg(c: Channel, done: (list: Program[]) => void): void {
-    const hit = epgCache.get(c.id);
-    if (hit && Date.now() - hit.at < 600000) { done(hit.list); return; }
     epgFor = c.id;
-    app.source.epg(c).then((list) => { epgCache.set(c.id, { at: Date.now(), list }); if (epgFor === c.id) done(list); });
+    app.source.epg(c).then((list) => { if (epgFor === c.id) done(list); });
+  }
+
+  /** After a pause on a channel, the guide of the ones above and below it, so the next move shows it at once. */
+  let aheadTimer = 0;
+  function guideAhead(c: Channel): void {
+    clearTimeout(aheadTimer);
+    aheadTimer = window.setTimeout(() => {
+      const all = chans.all(), i = all.indexOf(c);
+      for (const j of [i + 1, i - 1]) if (all[j]) app.source.epg(all[j]);
+    }, 700);
   }
 
   function showInfo(c: Channel): void {
+    guideAhead(c);
     if (pLogo.getAttribute('src') !== c.logo) pLogo.src = c.logo;
     lazyImg(nLogo, c.logo);
     nLogo.src = c.logo;
@@ -182,7 +205,26 @@ export function live(params?: Record<string, unknown>): Screen {
     toast(on ? t('addFavorite') + ' ✓' : t('removeFavorite'));
     chans.refresh();
     showInfo(c);
+    ownCounts();
   }
+
+  /** The Favorites and Recently watched rows: shown while they have channels, with their counts. */
+  let base: Category[] = [];
+  function withOwn(list: Category[]): Category[] {
+    const out = list.slice(0, 1), f = favorites('live').length, r = recent('live').length;
+    if (f) out.push({ id: FAV, name: t('favorites'), count: f, icon: 'star' });
+    if (r) out.push({ id: RECENT, name: t('recentChannels'), count: r, icon: 'history' });
+    return out.concat(list.slice(1));
+  }
+  function ownCounts(): void {
+    if (!base.length) return;
+    const cur = cats.item(), list = withOwn(base);
+    const i = cur ? list.findIndex((x) => x.id === cur.id) : 0;
+    cats.set(list, Math.max(0, i));
+  }
+
+  // The now/next card follows the clock: every 30 s, and so the program that just started shows.
+  const nowTimer = window.setInterval(() => { const c = chans.item(); if (c && !destroyed) showInfo(c); }, 30000);
 
   const off = app.player.on((s, info) => {
     if (!playing) return;
@@ -191,8 +233,10 @@ export function live(params?: Record<string, unknown>): Screen {
 
   function loadCategories(): void {
     countLabel.textContent = t('loading');
-    app.source.liveCategories().then((list) => {
+    app.source.liveCategories().then((got) => {
       if (destroyed) return;
+      base = got;
+      const list = withOwn(got);
       const startCat = params && params.category ? list.findIndex((c) => c.id === params.category) : 0;
       cats.set(list, Math.max(0, startCat));
       if (list[Math.max(0, startCat)]) loadChannels(list[Math.max(0, startCat)]);
@@ -217,6 +261,8 @@ export function live(params?: Record<string, unknown>): Screen {
       off();
       clearTimeout(catTimer);
       clearTimeout(infoTimer);
+      clearTimeout(aheadTimer);
+      clearInterval(nowTimer);
       if (playing) app.player.stop();
     },
   };

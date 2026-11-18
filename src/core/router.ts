@@ -41,6 +41,8 @@ export function open(name: string, params?: Record<string, unknown>, opts?: { re
   if (opts && opts.reset) while (stack.length) destroyEntry(stack.pop()!);
   else if (opts && opts.replace && prev) destroyEntry(stack.pop()!);
   else if (prev) prev.screen.el.style.display = 'none';
+  // Memory: at most MAX_DEPTH screens kept; past that, the oldest above the first one (Home) go for good.
+  while (stack.length >= MAX_DEPTH) destroyEntry(stack.splice(1, 1)[0]);
   const screen = registry[name](params);
   screen.el.classList.add('screen');
   host.appendChild(screen.el);
@@ -48,10 +50,18 @@ export function open(name: string, params?: Record<string, unknown>, opts?: { re
   setLayer(screen.el, screen.first ? screen.first() : null);
 }
 
+const MAX_DEPTH = 8;
+const destroyHooks: Array<() => void> = [];
+/** Called after a screen is gone for good (the image loader lets go of its pictures). */
+export function onScreenGone(fn: () => void): void { destroyHooks.push(fn); }
+
 function destroyEntry(e: Entry): void {
   if (e.screen.destroy) e.screen.destroy();
   if (e.screen.el.parentNode) e.screen.el.parentNode.removeChild(e.screen.el);
+  for (const fn of destroyHooks) fn();
 }
+
+export function depth(): number { return stack.length; }
 
 /** Back: the dialog, then the screen's own Back, then the screen under it. False at the bottom of the stack. */
 export function back(): boolean {

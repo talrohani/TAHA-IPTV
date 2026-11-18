@@ -7,6 +7,7 @@ import { app } from '../app';
 import { openItem } from './nav';
 import type { Screen } from '../core/router';
 import type { Channel, Movie, Series } from '../data/types';
+import { matching } from '../data/lists';
 
 type Scope = 'all' | 'live' | 'movie' | 'series';
 
@@ -34,7 +35,7 @@ export function search(params?: Record<string, unknown>): Screen {
 
   let seq = 0, timer = 0;
   function run(): void {
-    const q = input.value.trim().toLowerCase(), my = ++seq;
+    const q = input.value.trim(), my = ++seq;
     results.innerHTML = '';
     if (!q) { results.appendChild(h('div', { cls: 'empty', text: t('searchHint') })); return; }
     Promise.all([
@@ -43,8 +44,8 @@ export function search(params?: Record<string, unknown>): Screen {
       scope === 'all' || scope === 'series' ? app.source.series('*') : Promise.resolve([] as Series[]),
     ]).then(([cs, ms, ss]) => {
       if (my !== seq) return;
-      const hit = (n: string) => n.toLowerCase().indexOf(q) >= 0;
-      const c = cs.filter((x) => hit(x.name)).slice(0, 30), m = ms.filter((x) => hit(x.name)).slice(0, 30), s = ss.filter((x) => hit(x.name)).slice(0, 30);
+      // Names are folded once per list (Arabic letter forms too: "اخبار" finds "أخبار"); at most 30 of each.
+      const c = matching(cs, q, 30), m = matching(ms, q, 30), s = matching(ss, q, 30);
       if (!c.length && !m.length && !s.length) { results.appendChild(h('div', { cls: 'empty', text: t('noResults') })); return; }
       const row = (ic: Parameters<typeof sectionTitle>[0], title: string, cards: HTMLElement[]) => {
         if (!cards.length) return;

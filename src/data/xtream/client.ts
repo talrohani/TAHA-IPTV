@@ -14,8 +14,42 @@ import { hash } from '../../ui/art';
 
 const TIMEOUT = 15000, BIG_TIMEOUT = 45000;
 const LIST_TTL = 30 * 60000, CAT_TTL = 12 * 3600000, EPG_TTL = 10 * 60000;
+const GUIDE_MAX = 300;
 
 interface Cached<T> { at: number; data: T }
+interface Guide { at: number; list: Program[] }
+
+/**
+ * At most `max` jobs at a time; the newest waiting job goes first (what's on screen now), and past `keep` waiting the
+ * oldest are dropped: they never run, and their promise rejects (to the caller, like a failed request).
+ */
+export class Queue {
+  private active = 0;
+  private waiting: Array<{ go: () => void; drop: () => void }> = [];
+  constructor(private readonly max: number, private readonly keep: number) {}
+
+  run<T>(job: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const go = () => {
+        this.active++;
+        let p: Promise<T>;
+        try { p = job(); } catch (e) { p = Promise.reject(e); }
+        p.then((v) => { this.next(); resolve(v); }, (e) => { this.next(); reject(e); });
+      };
+      if (this.active < this.max) { go(); return; }
+      this.waiting.push({ go, drop: () => reject(new XtreamError('cancelled')) });
+      while (this.waiting.length > this.keep) this.waiting.shift()!.drop();
+    });
+  }
+
+  private next(): void {
+    this.active--;
+    const w = this.waiting.pop();
+    if (w) w.go();
+  }
+
+  get size(): { active: number; waiting: number } { return { active: this.active, waiting: this.waiting.length }; }
+}
 
 export class XtreamClient implements DataSource {
   private readonly base: string;
@@ -25,6 +59,9 @@ export class XtreamClient implements DataSource {
   private readonly mem = new Map<string, Cached<unknown>>();
   private readonly running = new Map<string, Promise<unknown>>();
   private readonly cacheKey: string;
+  private readonly guide = new Map<number, Guide>();
+  private readonly guideRunning = new Map<number, Promise<Program[]>>();
+  private readonly guideQueue = new Queue(3, 12);
 
   constructor(server: string, username: string, password: string) {
     this.base = server.replace(/\/+$/, '');
@@ -109,8 +146,22 @@ export class XtreamClient implements DataSource {
   /** Forget everything kept for this account (Settings > Clear cache). */
   clearCache(): void {
     this.mem.clear();
+    this.guide.clear();
     save(this.cacheKey, {});
   }
+
+  /**
+   * Memory: what has expired goes (lists after 30 min, guides after 10), so a long evening of watching doesn't keep
+   * every list and guide it ever opened. Called every few minutes and when the app goes to the background.
+   */
+  trimMemory(): void {
+    const now = Date.now();
+    this.mem.forEach((v, k) => { if (now - v.at > (k.indexOf('cats.') === 0 ? CAT_TTL : LIST_TTL)) this.mem.delete(k); });
+    this.guide.forEach((v, k) => { if (now - v.at > EPG_TTL) this.guide.delete(k); });
+  }
+
+  /** For Settings' diagnostics: how much is held in memory. */
+  memoryStats(): { lists: number; guides: number } { return { lists: this.mem.size, guides: this.guide.size }; }
 
   // MARK: live
 
@@ -132,9 +183,32 @@ export class XtreamClient implements DataSource {
     return this.allChannels().then((all) => (categoryId === '*' ? all : all.filter((c) => c.category === categoryId)));
   }
 
+  /**
+   * A channel's guide (get_short_epg, 4 programs). Kept apart from the lists (they'd push each other out): the last
+   * 300 channels for 10 minutes, or until the programs it has are all over. At most 3 asked at a time, the newest
+   * first, and only the last 12 waiting (a fast scroll through a list doesn't queue hundreds). No guide is no error.
+   */
   epg(c: Channel): Promise<Program[]> {
-    return this.cached('epg.' + c.id, EPG_TTL, () => this.call({ action: 'get_short_epg', stream_id: c.id, limit: 4 })
-      .then((json) => N.programs(json, Date.now()), () => [] as Program[]));   // no guide is not an error
+    const now = Date.now(), hit = this.guide.get(c.id);
+    if (hit && now - hit.at < EPG_TTL && (!hit.list.length || hit.list[hit.list.length - 1].end > now)) {
+      this.guide.delete(c.id);
+      this.guide.set(c.id, hit);   // most recently used last
+      return Promise.resolve(hit.list.filter((p) => p.end > now));
+    }
+    const running = this.guideRunning.get(c.id);
+    if (running) return running;
+    const p = this.guideQueue.run(() => this.call({ action: 'get_short_epg', stream_id: c.id, limit: 4 }))
+      .then((json) => N.programs(json, Date.now()), () => [] as Program[])
+      .then((list) => {
+        this.guide.delete(c.id);
+        this.guide.set(c.id, { at: Date.now(), list });
+        while (this.guide.size > GUIDE_MAX) this.guide.delete(this.guide.keys().next().value as number);
+        return list;
+      });
+    this.guideRunning.set(c.id, p);
+    const done = () => { this.guideRunning.delete(c.id); };
+    p.then(done, done);
+    return p;
   }
 
   // MARK: movies

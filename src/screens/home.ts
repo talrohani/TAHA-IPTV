@@ -7,7 +7,8 @@ import { iconEl } from '../ui/icons';
 import { skyline } from '../ui/art';
 import { t } from '../core/i18n';
 import { app } from '../app';
-import { continueWatching, recent } from '../data/library';
+import { continueWatching, recent, flush } from '../data/library';
+import { newest } from '../data/lists';
 import { openEntry, openItem } from './nav';
 import type { Screen } from '../core/router';
 import type { Movie, Series } from '../data/types';
@@ -48,13 +49,13 @@ export function home(): Screen {
     row('history', t('continueWatching'), continueWatching().slice(0, 10).map((e) => resumeCard(e, () => openEntry(e, true), 'home')));
     // Latest movies, then the rest, a frame later each: the screen shows before every row is built.
     app.source.movies('*').then((list) => {
-      const latest = (list as Movie[]).slice().sort((a, b) => b.added - a.added).slice(0, 18);
+      const latest = newest(list as Movie[], 18);
       row('film', t('latestMovies'), latest.map((m) => stillCard(m, () => openItem(m))));
       const watched = recent().slice(0, 14);
       setTimeout(() => {
         row('clock', t('recentlyWatched'), watched.map((e) => resumeCard(e, () => openEntry(e, false), 'home')));
         app.source.series('*').then((sl) => {
-          const ls = (sl as Series[]).slice().sort((a, b) => b.added - a.added).slice(0, 16);
+          const ls = newest(sl as Series[], 16);
           row('layers', t('latestSeries'), ls.map((s) => posterCard(s, () => openItem(s))));
         }, () => { /* a row that can't load is left out; the Library shows the error */ });
       }, 30);
@@ -75,6 +76,7 @@ export function home(): Screen {
     // Back on Home: leave the app (asked first).
     onBack: () => {
       confirm(t('exitTitle'), '', t('exit'), () => {
+        flush();   // favorites, history and resume points on disk before the app closes
         try { (window as unknown as { tizen: { application: { getCurrentApplication(): { exit(): void } } } }).tizen.application.getCurrentApplication().exit(); } catch { /* the browser preview stays */ }
       });
       return true;

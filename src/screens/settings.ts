@@ -12,7 +12,7 @@ import { app } from '../app';
 import { signOut } from '../session';
 import { storeKind } from '../data/secure';
 import { failText } from '../core/i18n';
-import { resetFavorites, resetHistory } from '../data/library';
+import { resetFavorites, resetHistory, libraryStats } from '../data/library';
 import type { Screen } from '../core/router';
 
 type Section = 'playback' | 'appearance' | 'account' | 'application';
@@ -101,11 +101,17 @@ export function settings(params?: Record<string, unknown>): Screen {
       { ic: 'wifi', label: 'network', info: true, value: () => navigator.onLine === false ? t('offline') : t('online') },
       { ic: 'cpu', label: 'memory', info: true, value: () => {
         const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
-        return m ? Math.round(m.usedJSHeapSize / 1048576) + ' MB' : '—';
+        const c = app.source as unknown as { memoryStats?: () => { lists: number; guides: number } };
+        const s = c.memoryStats ? c.memoryStats() : null;
+        return (m ? Math.round(m.usedJSHeapSize / 1048576) + ' MB' : '—') + (s ? ' · ' + s.lists + ' / ' + s.guides : '');
+      } },
+      { ic: 'star', label: 'saved', info: true, value: () => {
+        const s = libraryStats();
+        return t('savedCount', { f: s.favorites, h: s.history, r: s.resume });
       } },
       { ic: 'info', label: 'platform', info: true, value: () => (/Tizen\s[\d.]+/.exec(navigator.userAgent) || ['Browser'])[0] },
       { ic: 'key', label: 'storeKind', info: true, value: () => storeKind() === 'keymanager' ? t('keymanager') : t('appStore') },
-      { ic: 'info', label: 'version', info: true, value: () => '0.3.0 (phase 3)' },
+      { ic: 'info', label: 'version', info: true, value: () => '0.4.0 (phase 4)' },
     ];
   }
 

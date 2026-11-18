@@ -4,10 +4,42 @@ A fast Xtream Codes player for Samsung Tizen TVs (built for the AU7000, Tizen 6.
 English as an option. Plain TypeScript and CSS, no UI framework; Vite builds it into one classic script that runs on
 the TV's Chromium 76 from the `.wgt` package.
 
-## Status: phase 3 (playback) — waiting for review
+## Status: phase 4 (persistence and optimization) — waiting for review
 
-Phases 1 (screens) and 2 (Xtream Codes) were approved. Phase 3 plays the streams: Samsung AVPlay on the TV,
-HTML5 video in a browser. Not started yet, by plan: persistence and EPG tuning (phase 4), the Tizen package (phase 5).
+Phases 1 (screens), 2 (Xtream Codes) and 3 (playback, confirmed on the TV) were approved. Phase 4 makes what the
+TV keeps reliable and the app lighter on big providers. Not started yet, by plan: the Tizen package (phase 5).
+
+### What the TV keeps (`src/data/library.ts`, format v2)
+
+- Three stores per account, each with its own limit, so one can't push another out: resume points (500, oldest go
+  first), history (150, of which at most 40 channels: flipping channels never costs a film's resume point),
+  favorites (no limit).
+- "Watched" is the length as played (or the end reached), never the provider's listed length, which is often 0.
+- Each entry keeps a small copy of its item (no plot, cast or drawn pictures): Continue Watching, History and
+  Favorites open a film directly, an episode with only its series' episode list. Nothing the provider removed opens
+  silently: it says so.
+- Continue Watching: films and episodes left part-way, newest first, one episode per series.
+- Writes are gathered for a second and written at once when the app is hidden or closed. Stored data that doesn't
+  read back as expected is dropped store by store; a full storage drops the oldest half of the history and tries
+  again. v1 data (phases 1–3) is carried over on first start.
+- Favorites and History: the red key removes the selected item. Live TV: Favorites and Recently watched are
+  categories at the top of the list.
+
+### Guide and speed
+
+- Guide (`get_short_epg`): its own cache of the last 300 channels (10 min, or until its programs are over), at most
+  3 requests at a time, the newest first, only 12 waiting: a fast scroll through 30 channels asks for 3. The two
+  channels next to the selected one are fetched ahead; the now/next card and the player follow the clock.
+- Big lists: Home's "latest" rows and Library's rows pick their 16 without sorting the catalogue; a genre's grid is
+  sorted once per list and order; search folds names once per list (and Arabic letter forms: اخبار finds أخبار).
+- Memory: at most 8 screens kept (a similar title replaces its details page); images of closed screens are let go;
+  expired lists and guides are dropped every 5 minutes and when the app goes to the background; dead picture links
+  hide instead of showing a broken picture. Settings › Application shows memory, lists/guides held, and what's saved.
+
+Known: Home still downloads the full film and series lists for its "latest" rows (Xtream has no "latest" call).
+On a very large provider that is the app's biggest download and memory use.
+
+### Phase 3: playback
 
 ### Playback (`src/playback/`)
 
@@ -49,7 +81,9 @@ HTML5 video in a browser. Not started yet, by plan: persistence and EPG tuning (
 
 ### Tested
 
-- Unit tests (32): the player's states, stale events, start and stall timeouts, live reconnects, seek queue,
+- Unit tests (46). Phase 4: channel flipping vs resume points, gathered writes, done/part-way, unknown lengths,
+  one episode per series, item copies, corrupt data, v1 carry-over, full storage, list picking/sorting/search,
+  the guide queue. Phase 3: the player's states, stale events, start and stall timeouts, live reconnects, seek queue,
   background and back; AVPlay's call order, resume seek, late prepares, tracks, subtitles, errors (against a
   stand-in for `webapis.avplay`); response normalizers; addresses, focus geometry, time formats.
 - In the browser (HTML5 engine, demo streams): live preview inside its box, full screen and back to the preview,

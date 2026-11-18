@@ -14,7 +14,7 @@ import { openDialog, closeDialog, back } from '../core/router';
 import { focus, focused, focusGroup } from '../core/focus';
 import { getSettings } from '../core/store';
 import { app } from '../app';
-import { record, isFavorite, toggleFavorite } from '../data/library';
+import { record, markDone, isFavorite, toggleFavorite } from '../data/library';
 import type { Screen } from '../core/router';
 import type { Channel, Episode, Movie, Program, Series } from '../data/types';
 import type { Key } from '../core/keys';
@@ -170,15 +170,19 @@ export function player(params?: Record<string, unknown>): Screen {
     favCtl.classList.toggle('on', on);
   }
 
+  let epgAt = 0;
   function loadEpg(): void {
     const c = item as Channel;
     epg = [];
+    epgAt = Date.now();
     drawLive();
     app.source.epg(c).then((l) => { if (item === c) { epg = l; drawLive(); } });
   }
 
   function drawLive(): void {
     const now = Date.now(), a = epg.find((x) => x.start <= now && x.end > now), b = epg.find((x) => x.start > now);
+    // The guide ran out (its last program ended while watching): ask again, at most once a minute.
+    if (!a && epg.length && epg[epg.length - 1].end <= now && now - epgAt > 60000) { loadEpg(); return; }
     liveInfo.children[0].textContent = a ? t('now') + ': ' + a.title : t('noEpg');
     liveInfo.children[1].textContent = b ? t('next') + ': ' + b.title : '';
     liveInfo.children[2].textContent = a ? clock(new Date(a.start)) + ' – ' + clock(new Date(a.end)) : '';
@@ -450,7 +454,7 @@ export function player(params?: Record<string, unknown>): Screen {
       return;
     }
     if (st === 'ENDED' && !isLive()) {
-      saveNow();
+      markDone(item as Movie | Episode, p.duration());   // watched: the series moves on, Continue Watching lets it go
       if (item.kind === 'episode') { step(1); return; }
       leave();
       return;

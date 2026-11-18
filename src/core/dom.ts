@@ -64,10 +64,18 @@ export function onKey(el: HTMLElement, fn: (key: string, repeat: boolean) => boo
   (el as OkElement).__key = fn;
 }
 
-/** Images load only once they're near the screen. */
+/**
+ * Images load only once they're near the screen. One that fails (a provider's dead link) is hidden, so the card
+ * shows its own background and title, not a broken-picture sign. Images of a screen that's gone are let go of
+ * (sweepImages), so the observer doesn't keep them in memory.
+ */
 let observer: IntersectionObserver | null = null;
+const waiting = new Set<HTMLImageElement>();
+function broken(this: HTMLImageElement): void { this.style.visibility = 'hidden'; }
+
 export function lazyImg(img: HTMLImageElement, src: string): void {
   if (!src) return;
+  img.onerror = broken;
   if (typeof IntersectionObserver === 'undefined') { img.src = src; return; }
   if (!observer) {
     observer = new IntersectionObserver((entries) => {
@@ -75,14 +83,24 @@ export function lazyImg(img: HTMLImageElement, src: string): void {
         if (!e.isIntersecting) continue;
         const i = e.target as HTMLImageElement;
         const s = i.getAttribute('data-src');
-        if (s) { i.src = s; i.removeAttribute('data-src'); }
+        if (s) { i.style.visibility = ''; i.src = s; i.removeAttribute('data-src'); }
         observer!.unobserve(i);
+        waiting.delete(i);
       }
     }, { rootMargin: '400px' });
   }
   img.setAttribute('data-src', src);
   observer.observe(img);
+  waiting.add(img);
 }
+
+/** Lets go of images that were waiting to load on a screen that's gone. */
+export function sweepImages(): void {
+  if (!observer) return;
+  waiting.forEach((img) => { if (!img.isConnected) { observer!.unobserve(img); waiting.delete(img); } });
+}
+
+export function pendingImages(): number { return waiting.size; }
 
 export function pad2(n: number): string { return (n < 10 ? '0' : '') + n; }
 

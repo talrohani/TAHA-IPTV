@@ -9,13 +9,14 @@ import { t } from '../core/i18n';
 import { onFocus, focused, focus } from '../core/focus';
 import { app } from '../app';
 import { continueWatching, toggleFavorite } from '../data/library';
+import { sortedBy, topBy } from '../data/lists';
 import { openEntry, openItem } from './nav';
 import type { Screen } from '../core/router';
 import type { Category, Movie, Series } from '../data/types';
 import type { Key } from '../core/keys';
 
 type Mode = 'movie' | 'series';
-type Sort = 'newest' | 'rating' | 'name' | 'year';
+type Sort = import('../data/lists').Sort;
 const PAGE = 24;
 
 export function library(params?: Record<string, unknown>): Screen {
@@ -66,14 +67,7 @@ export function library(params?: Record<string, unknown>): Screen {
     return t('sort') + ': ' + t(sort === 'newest' ? 'sortNewest' : sort === 'rating' ? 'sortRating' : sort === 'name' ? 'sortName' : 'sortYear');
   }
 
-  function sorted(list: Array<Movie | Series>): Array<Movie | Series> {
-    const out = list.slice();
-    if (sort === 'newest') out.sort((a, b) => b.added - a.added);
-    else if (sort === 'rating') out.sort((a, b) => b.rating - a.rating);
-    else if (sort === 'year') out.sort((a, b) => b.year - a.year);
-    else out.sort((a, b) => a.name.localeCompare(b.name));
-    return out;
-  }
+  let raw: Array<Movie | Series> = [];
 
   function setMode(m: Mode): void {
     if (m === mode) return;
@@ -123,12 +117,13 @@ export function library(params?: Record<string, unknown>): Screen {
     const load = mode === 'movie' ? app.source.movies(genre) : app.source.series(genre);
     load.then((list) => {
       if (destroyed || m !== mode || g !== genre) return;   // another tab or genre was picked meanwhile
-      items = sorted(list as Array<Movie | Series>);
+      raw = list as Array<Movie | Series>;
       scroll.innerHTML = '';
       scroll.scrollTop = 0;
       grid = null;
+      // All: rows of 16 (picked, not sorted); a genre: the whole grid in the chosen order (sorted once per list).
       if (genre === '*') rows();
-      else gridView();
+      else { items = sortedBy(raw, sort); gridView(); }
     }, (err) => { if (!destroyed && m === mode && g === genre) showFail(err, renderBody); });
   }
 
@@ -148,9 +143,8 @@ export function library(params?: Record<string, unknown>): Screen {
   function rows(): void {
     const cw = continueWatching().filter((e) => (mode === 'movie' ? e.kind === 'movie' : e.kind === 'episode'));
     section('history', t('continueWatching'), cw.slice(0, 8).map((e) => resumeCard(e, () => openEntry(e, true), 'library')));
-    section('fire', t('latestAdded'), items.slice(0, 16).map(card));
-    const top = items.slice().sort((a, b) => b.rating - a.rating).slice(0, 16);
-    section('star', t('topRated'), top.map(card));
+    section('fire', t('latestAdded'), topBy(raw, 16, 'added').map(card));
+    section('star', t('topRated'), topBy(raw, 16, 'rating').map(card));
   }
 
   function gridView(): void {
