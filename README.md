@@ -55,8 +55,8 @@ HTML5 video in a browser. Not started yet, by plan: persistence and EPG tuning (
 - In the browser (HTML5 engine, demo streams): live preview inside its box, full screen and back to the preview,
   film resume, seek bar (choose a point, OK), speed, info (real resolution), leaving saves the position. Phase 2's
   sign-in, lists, search and error cases against a local stand-in server.
-- Not yet on the TV: AVPlay itself (the picture under the page, tracks, subtitles, 4K, suspend/restore), real
-  providers' streams and Key Manager. The AU7000 decodes H.264 and HEVC in HLS and MPEG-TS; which of a provider's
+- On the TV (AU7000, Tizen 6.0, test build signed with a Tizen certificate): AVPlay plays, reported by the owner
+  on 2026-11-18. Not checked one by one yet: each of tracks, subtitles, 4K, suspend/restore, Key Manager. The AU7000 decodes H.264 and HEVC in HLS and MPEG-TS; which of a provider's
   streams play depends on their formats.
 
 | Screen | What's there |
