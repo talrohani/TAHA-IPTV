@@ -1,6 +1,6 @@
 {
   "name": "taha-iptv",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Taha IPTV: a fast Xtream Codes player for Samsung Tizen TVs (Arabic, right to left).",
   "type": "module",
@@ -9,7 +9,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 5181",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "compat": "python3 tizen/compat.py",
+    "package": "npm run build && python3 tizen/package.py --sign"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

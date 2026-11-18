@@ -109,9 +109,13 @@ export function settings(params?: Record<string, unknown>): Screen {
         const s = libraryStats();
         return t('savedCount', { f: s.favorites, h: s.history, r: s.resume });
       } },
-      { ic: 'info', label: 'platform', info: true, value: () => (/Tizen\s[\d.]+/.exec(navigator.userAgent) || ['Browser'])[0] },
+      { ic: 'info', label: 'platform', info: true, value: () => {
+        // The TV's system and its browser engine (the AU7000: Tizen 6.0, Chromium 76).
+        const ua = navigator.userAgent, chrome = /Chrome\/(\d+)/.exec(ua);
+        return (/Tizen\s[\d.]+/.exec(ua) || ['Browser'])[0] + (chrome ? ' · Chromium ' + chrome[1] : '');
+      } },
       { ic: 'key', label: 'storeKind', info: true, value: () => storeKind() === 'keymanager' ? t('keymanager') : t('appStore') },
-      { ic: 'info', label: 'version', info: true, value: () => '0.4.0 (phase 4)' },
+      { ic: 'info', label: 'version', info: true, value: () => __APP_VERSION__ },
     ];
   }
 

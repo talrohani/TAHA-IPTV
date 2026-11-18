@@ -3,6 +3,7 @@
 
     python3 tizen/install.py 192.168.1.50              # install or update, then open it
     python3 tizen/install.py 192.168.1.50 --uninstall  # remove it
+    python3 tizen/install.py 192.168.1.50 --info       # what the TV reports (Tizen version...), changes nothing
 
 First: npm run build, then python3 tizen/package.py --sign <profile>. On the TV, once: Apps, type 1 2 3 4 5 on the
 remote, Developer mode on with this computer's IP as Host PC IP, restart the TV.
@@ -126,6 +127,16 @@ def main():
     if len(args) != 1:
         sys.exit(__doc__)
     ip, uninstall = args[0], '--uninstall' in sys.argv
+    if '--info' in sys.argv:
+        try:
+            sdb = Sdb(ip)
+        except (OSError, ConnectionError) as e:
+            sys.exit('Couldn\'t reach the TV on port %d (%s).' % (PORT, e))
+        caps = sdb.capabilities()
+        print('Connection: ' + sdb.banner)
+        for k in sorted(caps):
+            print('  %s: %s' % (k, caps[k]))
+        return
     if uninstall:
         with open(os.path.join(ROOT, 'tizen', 'config.xml'), encoding='utf-8') as f:
             manifest = f.read()

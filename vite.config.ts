@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 
 /**
@@ -17,8 +18,12 @@ function classicScript(): Plugin {
 
 // Samsung AU7000 (2021, Tizen 6.0) runs Chromium 76: the bundle is compiled down to what it understands, with
 // relative paths so the app works from the .wgt package.
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
+
 export default defineConfig({
   base: './',
+  // One version for everything: package.json → the app (Settings) and the .wgt manifest (tizen/package.py).
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   plugins: [classicScript()],
   build: {
     target: ['es2019', 'chrome76'],

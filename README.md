@@ -4,10 +4,24 @@ A fast Xtream Codes player for Samsung Tizen TVs (built for the AU7000, Tizen 6.
 English as an option. Plain TypeScript and CSS, no UI framework; Vite builds it into one classic script that runs on
 the TV's Chromium 76 from the `.wgt` package.
 
-## Status: phase 4 (persistence and optimization) — waiting for review
+## Status: 1.0.0 — phase 5 (Tizen package) done, waiting for the TV check
 
-Phases 1 (screens), 2 (Xtream Codes) and 3 (playback, confirmed on the TV) were approved. Phase 4 makes what the
-TV keeps reliable and the app lighter on big providers. Not started yet, by plan: the Tizen package (phase 5).
+All five phases are built: screens (1), Xtream Codes (2), playback (3, confirmed on the TV), persistence and
+optimization (4), and the Tizen package (5). **Installing, updating and troubleshooting: [docs/INSTALL.md](docs/INSTALL.md)**,
+with a checklist of what to try on the TV and where each item was already checked.
+
+### Phase 5: the package (`tizen/`)
+
+- `config.xml`: package `TahaIPTV01`, app `TahaIPTV01.TahaIPTV`; privileges internet, network.public,
+  tv.inputdevice, keymanager (the TV accepted all four); any server address allowed (`<access origin="*">`: a
+  provider can be any host); hardware keys on, no background running.
+- `compat.py`: checks the build for JavaScript and CSS newer than Chromium 76 (the AU7000's engine); `package.py`
+  runs it first and stops on a finding.
+- `package.py`: `dist/` → `TahaIPTV.wgt`, with `package.json`'s version in the manifest (the app shows the same one
+  in Settings), signed with `tizen package`.
+- `install.py`: installs, uninstalls, or (`--info`) shows what the TV reports, over SDB without Tizen Studio.
+
+### Phase 4: persistence and optimization
 
 ### What the TV keeps (`src/data/library.ts`, format v2)
 
@@ -116,11 +130,11 @@ npm run build      # dist/: what goes into the .wgt
 npm test
 ```
 
-On the TV (a test build; Phase 5 finishes the package and the install guide):
+On the TV (step by step, certificates and troubleshooting: [docs/INSTALL.md](docs/INSTALL.md)):
 
 ```bash
 npm run build
-python3 tizen/package.py --sign <profile>   # TahaIPTV.wgt, signed with a Tizen certificate profile
+python3 tizen/package.py --sign <profile>   # checks Chromium 76 compatibility, then TahaIPTV.wgt, signed
 python3 tizen/install.py <TV IP>            # Developer Mode on, this computer as Host PC IP
 ```
 

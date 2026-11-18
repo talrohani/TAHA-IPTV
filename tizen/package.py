@@ -8,7 +8,9 @@ The TV installs only signed packages. Signing uses Samsung's `tizen package` (Ti
 to where it is when it isn't in a usual place. A 2021 AU7000 (Tizen 6.0) takes a Tizen certificate; 2023 and newer
 TVs need a Samsung one made for that TV.
 """
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -31,11 +33,29 @@ def tizen_cli():
     return shutil.which('tizen')
 
 
+def version():
+    with open(os.path.join(ROOT, 'package.json'), encoding='utf-8') as f:
+        return json.load(f)['version']
+
+
+def manifest():
+    """tizen/config.xml with package.json's version (one version for the app and its package)."""
+    with open(os.path.join(HERE, 'config.xml'), encoding='utf-8') as f:
+        text = f.read()
+    v = version()
+    if not re.match(r'^\d+\.\d+\.\d+$', v):
+        sys.exit('package.json\'s version must be x.y.z for a Tizen package (it is %r).' % v)
+    return re.sub(r'(<widget\b[^>]*\bversion=")[^"]*(")', r'\g<1>' + v + r'\g<2>', text, count=1)
+
+
 def pack():
     if not os.path.exists(os.path.join(DIST, 'index.html')):
         sys.exit('Build it first: npm run build')
+    sys.path.insert(0, HERE)
+    import compat   # stops here if the build uses what the AU7000's Chromium 76 can't run
+    compat.main()
     with zipfile.ZipFile(WGT, 'w', zipfile.ZIP_DEFLATED) as z:
-        z.write(os.path.join(HERE, 'config.xml'), 'config.xml')
+        z.writestr('config.xml', manifest())
         z.write(os.path.join(HERE, 'icon.png'), 'icon.png')
         for folder, _, files in os.walk(DIST):
             for f in files:
@@ -71,8 +91,8 @@ def main():
         sign(profile)
     with zipfile.ZipFile(WGT) as z:
         count = len(z.namelist())
-    print('Built TahaIPTV.wgt (%d files, %d KB, %s)' % (count, os.path.getsize(WGT) // 1024,
-                                                      'signed with "%s"' % profile if profile else 'not signed'))
+    print('Built TahaIPTV.wgt %s (%d files, %d KB, %s)' % (version(), count, os.path.getsize(WGT) // 1024,
+                                                         'signed with "%s"' % profile if profile else 'not signed'))
 
 
 if __name__ == '__main__':
