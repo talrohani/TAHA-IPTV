@@ -82,6 +82,16 @@ npm run build      # dist/: what goes into the .wgt
 npm test
 ```
 
+On the TV (a test build; Phase 5 finishes the package and the install guide):
+
+```bash
+npm run build
+python3 tizen/package.py --sign <profile>   # TahaIPTV.wgt, signed with a Tizen certificate profile
+python3 tizen/install.py <TV IP>            # Developer Mode on, this computer as Host PC IP
+```
+
+It installs as its own app (package `TahaIPTV01`), beside anything else on the TV.
+
 Remote ↔ keyboard: arrows; Enter = OK; Escape or Backspace = Back; Space = Play/Pause; A B C D = red, green,
 yellow, blue; [ ] = rewind / fast forward; PageUp / PageDown = channel up / down; 0–9.
 
