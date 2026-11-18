@@ -1,19 +1,16 @@
 /**
- * Xtream Codes sign-in: server, username, password, remember, test, connect; saved accounts to edit or remove.
- * Phase 1: the form checks what it can (all three fields, an http(s) address) and connects to the demo data; the
- * real player_api.php login comes in phase 2. Passwords are never saved in phase 1 (server and username only).
+ * Xtream Codes sign-in: server, username, password, remember, test, connect; saved accounts to use, edit or remove.
+ * The server is asked (player_api.php) before anything is saved. Errors say what went wrong, never with the
+ * address or the password.
  */
-import { h, button, brand } from '../ui/components';
+import { h, button, brand, confirm } from '../ui/components';
 import { iconEl } from '../ui/icons';
 import { skyline } from '../ui/art';
-import { t } from '../core/i18n';
-import { open } from '../core/router';
+import { t, failText } from '../core/i18n';
 import { focus } from '../core/focus';
-import { load, save } from '../core/store';
-import { app } from '../app';
+import * as Accounts from '../data/accounts';
+import { signIn, test as testAccount, startDemo } from '../session';
 import type { Screen } from '../core/router';
-
-interface Saved { server: string; username: string }
 
 export function normalizeServer(raw: string): string | null {
   let s = raw.trim();
@@ -24,7 +21,8 @@ export function normalizeServer(raw: string): string | null {
   return m[1].toLowerCase() + '://' + m[2].toLowerCase() + (m[3] || '') + (m[4] || '').replace(/\/(player_api|get)\.php$/i, '').replace(/\/+$/, '');
 }
 
-export function login(): Screen {
+export function login(params?: Record<string, unknown>): Screen {
+  const prefill = params && (params.prefill as Accounts.SavedAccount | undefined);
   const el = h('div', { cls: 'login' });
   const bg = h('div', { cls: 'bg' });
   bg.style.backgroundImage = 'url("' + skyline() + '")';
@@ -38,7 +36,8 @@ export function login(): Screen {
   const server = field(t('server'), 'url', 'http://example.com:8080');
   const user = field(t('username'), 'text', '');
   const pass = field(t('password'), 'password', '');
-  let remember = true;
+  let editing: Accounts.SavedAccount | null = null;
+  let remember = true, busy = false;
   const check = h('div', { cls: 'check on', focus: true, onOk: () => { remember = !remember; check.classList.toggle('on', remember); } },
     [h('span', { cls: 'box' }, [iconEl('check')]), h('span', { text: t('remember') })]);
   const msg = h('div', { cls: 'msg' });
@@ -48,60 +47,89 @@ export function login(): Screen {
     msg.className = 'msg' + (kind ? ' ' + kind : '');
   }
 
-  function check3(): string | null {
-    if (!server.input.value.trim() || !user.input.value.trim() || !pass.input.value) { say(t('errMissing'), 'err'); return null; }
+  function edit(a: Accounts.SavedAccount): void {
+    editing = a;
+    server.input.value = a.server;
+    user.input.value = a.username;
+    pass.input.value = '';
+    remember = a.remember;
+    check.classList.toggle('on', remember);
+    pass.input.placeholder = Accounts.password(a.id) ? t('passwordKeep') : '';
+  }
+
+  /** The three values, checked; null (with the reason shown) when something's missing or wrong. */
+  function values(): { s: string; u: string; p: string } | null {
+    const u = user.input.value.trim();
+    let p = pass.input.value;
+    if (!p && editing && editing.server === normalizeServer(server.input.value) && editing.username === u) p = Accounts.password(editing.id) || '';
+    if (!server.input.value.trim() || !u || !p) { say(t('errMissing'), 'err'); return null; }
     const s = normalizeServer(server.input.value);
     if (!s) { say(t('errUrl'), 'err'); return null; }
-    return s;
+    return { s, u, p };
   }
 
   function test(): void {
-    if (!check3()) return;
+    const v = values();
+    if (!v || busy) return;
+    busy = true;
     say(t('testing'));
-    setTimeout(() => { const a = app.source.account(); say(t('testOk', { d: new Date(a.expires).toISOString().slice(0, 10) }), 'ok'); }, 700);
+    testAccount(v.s, v.u, v.p).then((a) => {
+      busy = false;
+      say(t('testOk', { d: a.expires ? new Date(a.expires).toISOString().slice(0, 10) : '—' }), 'ok');
+    }, (err) => { busy = false; say(failText(err), 'err'); });
   }
 
   function connect(): void {
-    const s = check3();
-    if (!s) return;
+    const v = values();
+    if (!v || busy) return;
+    busy = true;
     say(t('connecting'));
-    if (remember) {
-      const list = load<Saved[]>('accounts', []).filter((a) => !(a.server === s && a.username === user.input.value.trim()));
-      list.unshift({ server: s, username: user.input.value.trim() });
-      save('accounts', list.slice(0, 5));
-    }
-    save('account', { server: s, username: user.input.value.trim(), demo: true });
-    setTimeout(() => open('home', undefined, { reset: true }), 500);
+    signIn(v.s, v.u, v.p, remember).catch((err) => { busy = false; say(failText(err), 'err'); });
   }
 
-  const connectBtn = button(t('connect'), 'wifi', connect, 'primary');
   const card = h('div', { cls: 'card glass', group: 'form' }, [
     brand('top'), h('h1', { text: t('login') }), h('div', { cls: 'sub', text: t('loginSub') }),
     server.wrap, user.wrap, pass.wrap, check,
-    h('div', { cls: 'actions' }, [connectBtn, button(t('testConnection'), 'refresh', test), button(t('useDemo'), 'sparkles', () => {
-      save('account', { server: 'demo', username: 'demo', demo: true });
-      open('home', undefined, { reset: true });
-    })]),
+    h('div', { cls: 'actions' }, [button(t('connect'), 'wifi', connect, 'primary'), button(t('testConnection'), 'refresh', test),
+      button(t('useDemo'), 'sparkles', () => startDemo())]),
     msg,
   ]);
   el.appendChild(card);
 
-  const accounts = h('div', { cls: 'accounts', group: 'accounts' });
+  const list = h('div', { cls: 'accounts', group: 'accounts' });
   function drawAccounts(): void {
-    accounts.innerHTML = '';
-    const list = load<Saved[]>('accounts', []);
-    if (!list.length) return;
-    accounts.appendChild(h('div', { cls: 'section-title' }, [iconEl('user'), h('span', { text: t('savedAccounts') })]));
-    for (const a of list) {
-      accounts.appendChild(h('div', { cls: 'acc-row glass' }, [
+    list.innerHTML = '';
+    const saved = Accounts.accounts();
+    if (!saved.length) return;
+    list.appendChild(h('div', { cls: 'section-title' }, [iconEl('user'), h('span', { text: t('savedAccounts') })]));
+    for (const a of saved) {
+      list.appendChild(h('div', { cls: 'acc-row glass' }, [
         h('span', { cls: 'who', text: a.username + ' @ ' + a.server.replace(/^https?:\/\//, '') }),
-        button(t('edit'), 'edit', () => { server.input.value = a.server; user.input.value = a.username; pass.input.value = ''; focus(pass.wrap); say(t('password') + '…'); }),
-        button(t('removeAcc'), 'trash', () => { save('accounts', load<Saved[]>('accounts', []).filter((x) => x !== a && !(x.server === a.server && x.username === a.username))); drawAccounts(); focus(server.wrap); }, 'danger'),
+        button(t('edit'), 'edit', () => { edit(a); focus(pass.wrap); }),
+        button(t('removeAcc'), 'trash', () => confirm(t('removeConfirm'), a.username + ' @ ' + a.server.replace(/^https?:\/\//, ''), t('removeAcc'), () => {
+          Accounts.removeAccount(a.id);
+          if (editing && editing.id === a.id) editing = null;
+          drawAccounts();
+          focus(server.wrap);
+        }), 'danger'),
       ]));
     }
   }
   drawAccounts();
-  el.appendChild(accounts);
+  el.appendChild(list);
 
-  return { el, first: () => server.wrap };
+  if (prefill) edit(prefill);
+  if (params && params.error) say(failText(params.error), 'err');
+
+  return { el, first: () => (prefill ? pass.wrap : server.wrap) };
+}
+
+export function splash(params?: Record<string, unknown>): Screen {
+  const el = h('div', { cls: 'login' });
+  const bg = h('div', { cls: 'bg' });
+  bg.style.backgroundImage = 'url("' + skyline() + '")';
+  el.appendChild(bg);
+  el.appendChild(h('div', { cls: 'card glass splash' }, [brand('top'), h('div', { cls: 'spin' }),
+    h('div', { cls: 'sub', text: t('connectingTo', { s: String((params && params.text) || '') }) })]));
+  return { el };
 }

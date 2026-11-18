@@ -19,8 +19,17 @@ export interface Entry {
 type Fav = Pick<Entry, 'kind' | 'id' | 'name' | 'image'>;
 
 const key = (kind: Kind, id: number): string => kind + ':' + id;
-let favs: Record<string, Fav> = load('favorites', {});
-let history: Entry[] = load('history', []);
+// Per account: two providers' ids mean different things. useLibrary() switches.
+let owner = 'demo';
+let favs: Record<string, Fav> = {};
+let history: Entry[] = [];
+const K = (name: string) => name + '.' + owner;
+
+export function useLibrary(accountId: string): void {
+  owner = accountId;
+  favs = load(K('favorites'), {});
+  history = load(K('history'), []);
+}
 
 export function imageOf(item: Item): string {
   return item.kind === 'live' ? item.logo : item.kind === 'episode' ? item.still : item.poster;
@@ -33,7 +42,7 @@ export function toggleFavorite(item: Channel | Movie | Series): boolean {
   const k = key(item.kind, item.id);
   if (favs[k]) delete favs[k];
   else favs[k] = { kind: item.kind, id: item.id, name: item.name, image: imageOf(item) };
-  save('favorites', favs);
+  save(K('favorites'), favs);
   return !!favs[k];
 }
 
@@ -43,14 +52,14 @@ export function favorites(kind?: Kind): Fav[] {
   return out;
 }
 
-export function resetFavorites(): void { favs = {}; remove('favorites'); }
+export function resetFavorites(): void { favs = {}; remove(K('favorites')); }
 
 /** Recorded when something starts playing, and again with where it stopped. */
 export function record(item: Channel | Movie | Episode, pos: number, dur: number, series?: Series): void {
   const e: Entry = { kind: item.kind, id: item.id, name: item.name, image: imageOf(item), at: Date.now(), pos, dur };
   if (item.kind === 'episode') { e.seriesId = item.seriesId; e.season = item.season; e.ep = item.num; if (series) { e.seriesName = series.name; e.image = item.still; } }
   history = [e].concat(history.filter((h) => !(h.kind === e.kind && h.id === e.id))).slice(0, 120);
-  save('history', history);
+  save(K('history'), history);
 }
 
 export function progress(kind: Kind, id: number): Entry | null {
@@ -67,23 +76,23 @@ export function recent(kind?: Kind): Entry[] { return kind ? history.filter((h) 
 
 export function removeFromHistory(kind: Kind, id: number): void {
   history = history.filter((h) => !(h.kind === kind && h.id === id));
-  save('history', history);
+  save(K('history'), history);
 }
 
-export function resetHistory(): void { history = []; remove('history'); }
+export function resetHistory(): void { history = []; remove(K('history')); }
 
 /** The demo account starts with a little history, so Continue Watching has something to show. */
 export function seedDemo(items: { movies: Movie[]; channels: Channel[] }): void {
-  if (load('seeded', false)) return;
+  if (load(K('seeded'), false)) return;
   const now = Date.now();
   const m = items.movies;
   const picks: Array<[Movie, number]> = [[m[0], 0.62], [m[4], 0.18], [m[9], 0.82], [m[13], 0.4]];
   history = picks.map(([mv, f], i) => ({ kind: 'movie' as Kind, id: mv.id, name: mv.name, image: mv.poster, at: now - i * 3600000,
     pos: Math.round(mv.duration * f), dur: mv.duration }));
   for (const c of items.channels.slice(0, 5)) history.push({ kind: 'live', id: c.id, name: c.name, image: c.logo, at: now - 86400000, pos: 0, dur: 0 });
-  save('history', history);
+  save(K('history'), history);
   favs = {};
   for (const c of items.channels.slice(2, 5)) favs[key('live', c.id)] = { kind: 'live', id: c.id, name: c.name, image: c.logo };
-  save('favorites', favs);
-  save('seeded', true);
+  save(K('favorites'), favs);
+  save(K('seeded'), true);
 }

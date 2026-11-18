@@ -56,9 +56,9 @@ export function home(): Screen {
         app.source.series('*').then((sl) => {
           const ls = (sl as Series[]).slice().sort((a, b) => b.added - a.added).slice(0, 16);
           row('layers', t('latestSeries'), ls.map((s) => posterCard(s, () => openItem(s))));
-        });
+        }, () => { /* a row that can't load is left out; the Library shows the error */ });
       }, 30);
-    });
+    }, () => { /* the same */ });
   }
   build();
 

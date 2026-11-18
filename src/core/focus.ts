@@ -20,7 +20,7 @@ export function stageScale(): number {
 function visible(el: HTMLElement): boolean {
   if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') return false;
   const r = el.getBoundingClientRect();
-  return r.width > 0 && r.height > 0;
+  return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
 }
 
 function groupOf(el: HTMLElement): HTMLElement | null {

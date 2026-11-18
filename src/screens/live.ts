@@ -3,7 +3,7 @@
  * OK on a channel plays it in the preview; OK again opens it full screen. The preview and the full screen share the
  * one player: going full screen only moves the picture, it doesn't restart the stream.
  */
-import { h, topTabs, hints, vlist, toast } from '../ui/components';
+import { h, topTabs, hints, vlist, toast, failBox } from '../ui/components';
 import { iconEl, icon, IconName } from '../ui/icons';
 import { lazyImg } from '../core/dom';
 import { t, errorText } from '../core/i18n';
@@ -99,13 +99,28 @@ export function live(params?: Record<string, unknown>): Screen {
   let epgFor = 0;
   let destroyed = false;
 
+  /** A failure in the channel column: why, and Try again (the columns stay as they were). */
+  const chanMsg = h('div', { cls: 'chan-msg' });
+  chanPanel.appendChild(chanMsg);
+  function fail(err: unknown, retry: () => void): void {
+    chanMsg.innerHTML = '';
+    chanPanel.classList.add('failed');
+    if (countLabel.textContent === t('loading')) countLabel.textContent = t('channels');
+    const box = failBox(err, () => { chanMsg.innerHTML = ''; chanPanel.classList.remove('failed'); retry(); },
+      () => (chanPanel.classList.contains('failed') ? null : chans.el));
+    chanMsg.appendChild(box);
+    focus(box.querySelector('[data-f]') as HTMLElement);
+  }
+
   function loadChannels(c: Category): void {
     app.source.channels(c.id).then((list) => {
       if (destroyed || cats.item() !== c) return;
+      chanMsg.innerHTML = '';
+      chanPanel.classList.remove('failed');
       chans.set(list, 0);
       countLabel.textContent = t('channelsCount', { n: list.length });
       if (list[0]) showInfo(list[0]);
-    });
+    }, (err) => { if (!destroyed) fail(err, () => loadChannels(c)); });
   }
 
   function epg(c: Channel, done: (list: Program[]) => void): void {
@@ -173,12 +188,16 @@ export function live(params?: Record<string, unknown>): Screen {
     pMsg.textContent = s === 'PREPARING' || s === 'BUFFERING' ? t('loading') : s === 'ERROR' ? errorText(info.error) : '';
   });
 
-  app.source.liveCategories().then((list) => {
-    if (destroyed) return;
-    const startCat = params && params.category ? list.findIndex((c) => c.id === params.category) : 0;
-    cats.set(list, Math.max(0, startCat));
-    if (list[Math.max(0, startCat)]) loadChannels(list[Math.max(0, startCat)]);
-  });
+  function loadCategories(): void {
+    countLabel.textContent = t('loading');
+    app.source.liveCategories().then((list) => {
+      if (destroyed) return;
+      const startCat = params && params.category ? list.findIndex((c) => c.id === params.category) : 0;
+      cats.set(list, Math.max(0, startCat));
+      if (list[Math.max(0, startCat)]) loadChannels(list[Math.max(0, startCat)]);
+    }, (err) => { if (!destroyed) fail(err, loadCategories); });
+  }
+  loadCategories();
 
   return {
     el,

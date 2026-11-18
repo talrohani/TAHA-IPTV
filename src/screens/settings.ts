@@ -7,8 +7,11 @@ import { iconEl, IconName } from '../ui/icons';
 import { t, TextKey, applyDirection } from '../core/i18n';
 import { open, openDialog, closeDialog } from '../core/router';
 import { focus } from '../core/focus';
-import { getSettings, setSetting, Settings, remove } from '../core/store';
+import { getSettings, setSetting, Settings } from '../core/store';
 import { app } from '../app';
+import { signOut } from '../session';
+import { storeKind } from '../data/secure';
+import { failText } from '../core/i18n';
 import { resetFavorites, resetHistory } from '../data/library';
 import type { Screen } from '../core/router';
 
@@ -73,14 +76,24 @@ export function settings(params?: Record<string, unknown>): Screen {
       { ic: 'sparkles', label: 'animations', value: () => t(s.animations), act: () => choose('animations', 'animations', [['on', 'on'], ['reduced', 'reduced'], ['off', 'off']]) },
     ];
     if (section === 'account') return [
-      { ic: 'user', label: 'account', info: true, value: () => acc.username + ' @ ' + acc.server },
+      { ic: 'user', label: 'account', info: true, value: () => acc.demo ? t('demoAccount') : acc.username + ' @ ' + acc.server.replace(/^https?:\/\//, '') },
       { ic: 'crown', label: 'subscription', info: true, value: () => acc.status === 'Active' ? t('active') : acc.status },
       { ic: 'clock', label: 'expires', info: true, value: () => acc.expires ? new Date(acc.expires).toISOString().slice(0, 10) : '—' },
-      { ic: 'wifi', label: 'connection', info: true, value: () => navigator.onLine === false ? t('offline') : t('connected') },
-      { ic: 'logout', label: 'changeAccount', act: () => { remove('account'); open('login', undefined, { reset: true }); } },
+      { ic: 'users', label: 'maxConnections', info: true, value: () => acc.maxConnections ? String(acc.maxConnections) : '—' },
+      { ic: 'wifi', label: 'connection', value: () => navigator.onLine === false ? t('offline') : t('testConnection'), act: () => {
+        const c = app.source as unknown as { login?: () => Promise<unknown> };
+        if (!c.login) { toast(t('connected')); return; }
+        toast(t('testing'));
+        c.login().then(() => toast(t('connected') + ' ✓'), (err) => toast(failText(err)));
+      } },
+      { ic: 'logout', label: 'changeAccount', act: () => signOut() },
     ];
     return [
-      { ic: 'refresh', label: 'clearCache', act: () => confirm(t('clearCache'), '', t('done'), () => toast(t('clearCache') + ' ✓')) },
+      { ic: 'refresh', label: 'clearCache', act: () => confirm(t('clearCache'), '', t('done'), () => {
+        const c = app.source as unknown as { clearCache?: () => void };
+        if (c.clearCache) c.clearCache();
+        toast(t('clearCache') + ' ✓');
+      }) },
       { ic: 'star', label: 'resetFavorites', danger: true, act: () => confirm(t('resetFavorites'), t('confirmAgain'), t('done'), () => { resetFavorites(); toast(t('resetFavorites') + ' ✓'); }) },
       { ic: 'history', label: 'resetHistory', danger: true, act: () => confirm(t('resetHistory'), t('confirmAgain'), t('done'), () => { resetHistory(); toast(t('resetHistory') + ' ✓'); }) },
       { ic: 'cpu', label: 'engine', info: true, value: () => app.player.engineName },
@@ -91,7 +104,8 @@ export function settings(params?: Record<string, unknown>): Screen {
         return m ? Math.round(m.usedJSHeapSize / 1048576) + ' MB' : '—';
       } },
       { ic: 'info', label: 'platform', info: true, value: () => (/Tizen\s[\d.]+/.exec(navigator.userAgent) || ['Browser'])[0] },
-      { ic: 'info', label: 'version', info: true, value: () => '0.1.0 (phase 1)' },
+      { ic: 'key', label: 'storeKind', info: true, value: () => storeKind() === 'keymanager' ? t('keymanager') : t('appStore') },
+      { ic: 'info', label: 'version', info: true, value: () => '0.2.0 (phase 2)' },
     ];
   }
 

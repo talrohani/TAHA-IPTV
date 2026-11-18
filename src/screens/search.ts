@@ -1,5 +1,5 @@
 /** Search across channels, movies and series; results come as you type (after a short pause). */
-import { h, sidebar, hints, sectionTitle, posterCard, chip } from '../ui/components';
+import { h, sidebar, hints, sectionTitle, posterCard, chip, failBox } from '../ui/components';
 import { iconEl } from '../ui/icons';
 import { lazyImg } from '../core/dom';
 import { t } from '../core/i18n';
@@ -54,7 +54,7 @@ export function search(params?: Record<string, unknown>): Screen {
       row('tv', t('channels'), c.map((x) => chanTile(x, () => openItem(x, c))));
       row('film', t('movies'), m.map((x) => posterCard(x, () => openItem(x))));
       row('layers', t('series'), s.map((x) => posterCard(x, () => openItem(x))));
-    });
+    }, (err) => { if (my === seq) { results.innerHTML = ''; results.appendChild(failBox(err, run)); } });
   }
   input.addEventListener('input', () => { clearTimeout(timer); timer = window.setTimeout(run, 280); });
 

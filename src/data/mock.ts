@@ -143,6 +143,7 @@ export const mockSource: DataSource = {
   epg: (c) => later(c.id % 9 === 0 ? [] : programsFor(c), 180),
   movieCategories: () => later(movieCats),
   movies: (cat) => later(cat === '*' ? movies : movies.filter((m) => m.category === cat)),
+  movieInfo: (m) => later(m, 60),
   seriesCategories: () => later(seriesCats),
   series: (cat) => later(cat === '*' ? seriesList : seriesList.filter((s) => s.category === cat)),
   seriesInfo: (s) => later(s.seasons || (s.seasons = seasonsFor(s)), 160),

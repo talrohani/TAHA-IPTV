@@ -40,6 +40,10 @@ const AR = {
   rating: 'التقييم', year: 'السنة', duration: 'المدة', added: 'أضيف', removeFromHistory: 'إزالة من السجل',
   emptyFav: 'لا توجد عناصر في المفضلة بعد', emptyHistory: 'لم تشاهد شيئًا بعد', channelsTab: 'القنوات', pressOk: 'اضغط OK',
   speed: 'السرعة', aspect: 'أبعاد الصورة', normal: 'عادي', fill: 'ملء الشاشة',
+  retry: 'إعادة المحاولة', connectingTo: 'جارٍ الاتصال بـ {s}...', passwordKeep: 'اتركها فارغة للإبقاء على كلمة المرور المحفوظة',
+  storeKind: 'حفظ كلمة المرور', keymanager: 'مخزن Tizen الآمن', appStore: 'مساحة التطبيق الخاصة', maxConnections: 'الاتصالات المسموحة',
+  loadFailed: 'تعذّر تحميل القائمة', demoAccount: 'الحساب التجريبي', signOut: 'تسجيل الخروج', removeConfirm: 'حذف هذا الحساب من التلفزيون؟',
+  connectedAs: 'متصل: {u}',
 };
 
 type Dict = typeof AR;
@@ -80,19 +84,37 @@ const EN: Dict = {
   rating: 'Rating', year: 'Year', duration: 'Duration', added: 'Added', removeFromHistory: 'Remove from history',
   emptyFav: 'No favorites yet', emptyHistory: 'Nothing watched yet', channelsTab: 'Channels', pressOk: 'Press OK',
   speed: 'Speed', aspect: 'Picture', normal: 'Normal', fill: 'Fill screen',
+  retry: 'Try again', connectingTo: 'Connecting to {s}...', passwordKeep: 'Leave empty to keep the saved password',
+  storeKind: 'Password storage', keymanager: 'Tizen secure store', appStore: "App's private storage", maxConnections: 'Connections allowed',
+  loadFailed: "The list couldn't be loaded", demoAccount: 'Demo account', signOut: 'Sign out', removeConfirm: 'Remove this account from the TV?',
+  connectedAs: 'Connected: {u}',
 };
 
 const ERRORS: Record<string, [string, string]> = {
   unsupported: ['لا يدعم هذا التلفزيون صيغة هذا البث', "This TV can't play this stream's format"],
-  network: ['تعذّر الوصول إلى البث. تحقق من الاتصال', "Can't reach the stream. Check the connection"],
-  timeout: ['استغرق البث وقتًا طويلًا للبدء', 'The stream took too long to start'],
+  network: ['تعذّر الوصول إلى الخادم. تحقق من العنوان واتصال الإنترنت', "Can't reach the server. Check the address and the internet connection"],
+  timeout: ['لم يستجب الخادم في الوقت المحدد', "The server didn't answer in time"],
   stream: ['تعذّر تشغيل هذا البث', "This stream couldn't be played"],
+  auth: ['اسم المستخدم أو كلمة المرور غير صحيحة', 'Wrong username or password'],
+  expired: ['انتهى هذا الاشتراك', 'This subscription has expired'],
+  disabled: ['هذا الحساب معطّل', 'This account is disabled'],
+  offline: ['التلفزيون غير متصل بالإنترنت', "The TV isn't connected to the internet"],
+  http: ['ردّ الخادم بخطأ ({s})', 'The server answered with an error ({s})'],
+  parse: ['هذا الخادم لا يستجيب كخادم Xtream Codes', "This server doesn't answer like an Xtream Codes server"],
+  url: ['عنوان الخادم غير صالح', "The server address isn't valid"],
+  cancelled: ['أُلغي الطلب', 'Cancelled'],
 };
 
-/** A player error, as the screen says it (never with the stream's address). */
-export function errorText(code?: string): string {
+/** A player or server error, as the screen says it (never with an address: those carry the password). */
+export function errorText(code?: string, status?: number): string {
   const e = ERRORS[code || 'stream'] || ERRORS.stream;
-  return lang() === 'ar' ? e[0] : e[1];
+  return (lang() === 'ar' ? e[0] : e[1]).replace('{s}', String(status || '?'));
+}
+
+/** Any thrown error → its text (an XtreamError's code, or a generic one). */
+export function failText(err: unknown): string {
+  const e = err as { code?: string; status?: number } | null;
+  return errorText(e && e.code ? e.code : 'network', e ? e.status : 0);
 }
 
 export function lang(): 'ar' | 'en' { return getSettings().lang; }

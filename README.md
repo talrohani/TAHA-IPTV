@@ -4,10 +4,36 @@ A fast Xtream Codes player for Samsung Tizen TVs (built for the AU7000, Tizen 6.
 English as an option. Plain TypeScript and CSS, no UI framework; Vite builds it into one classic script that runs on
 the TV's Chromium 76 from the `.wgt` package.
 
-## Status: phase 1 (UI) — waiting for review
+## Status: phase 2 (Xtream Codes) — waiting for review
 
-Every screen is built with demo data and full remote navigation. Not started yet, by plan: the real Xtream Codes
-client (phase 2), Samsung AVPlay (phase 3), persistence and EPG tuning (phase 4), the Tizen package (phase 5).
+Phase 1 (every screen, demo data, remote navigation) was approved. Phase 2 connects the screens to a real
+Xtream Codes account. Not started yet, by plan: Samsung AVPlay (phase 3), persistence and EPG tuning (phase 4),
+the Tizen package (phase 5).
+
+### How the app talks to the server (`src/data/xtream/`)
+
+- `player_api.php` only: login, `get_live_categories`, `get_live_streams`, `get_short_epg`, `get_vod_categories`,
+  `get_vod_streams`, `get_vod_info`, `get_series_categories`, `get_series`, `get_series_info`.
+- What loads when: at sign-in, the account check only; Home loads the film and series lists; Live loads the
+  channel list once (categories and counts come from it); films and series by category; details
+  (`get_vod_info`, `get_series_info`) and the guide (`get_short_epg`) only for the item on screen.
+- Caches: lists 30 min and the guide 10 min in memory (at most 14 lists); categories 12 h on the TV, under a
+  key that holds no credentials. Requests asked twice while running are shared. Settings › Clear cache empties both.
+- Odd answers are expected: lists sent as objects, numbers as strings, missing names/posters/guides, base64 guide
+  text, HTML instead of JSON, empty bodies. Broken entries are skipped, missing pictures are drawn instead.
+- Errors have a kind (wrong login, expired, disabled, unreachable, timeout after 15 s / 45 s for big lists,
+  not an Xtream server, HTTP error) and a message in Arabic or English; never the address, which holds the password.
+  Each screen shows the error with Try again.
+- Accounts: several can be saved (edit, remove after asking). The password goes to Tizen Key Manager when the TV
+  offers it, else the app's own private storage (Settings › Application shows which). The app never logs.
+
+### Tested
+
+- Unit tests: response normalizers (odd shapes above), addresses, focus geometry, time formats.
+- In the browser, against a local stand-in server: sign-in (valid, wrong password, expired, HTML answer,
+  unreachable, timeout), 6,000 channels, categories, guide, films, film details, series seasons, search, saved
+  account at start, server down at start and mid-session, Try again.
+- Not yet on the TV: real providers, Key Manager, and playback (phase 3).
 
 | Screen | What's there |
 | --- | --- |
@@ -41,11 +67,12 @@ yellow, blue; [ ] = rewind / fast forward; PageUp / PageDown = channel up / down
 src/
   core/      dom helpers, focus engine (spatial, with group memory), keys, router, i18n, storage
   ui/        icons, generated artwork, shared components (side menu, tabs, cards, virtual list, hints)
-  data/      types (Xtream's shapes), demo source, favorites/history/resume
+  data/      types (Xtream's shapes), demo source, favorites/history/resume (per account), saved accounts,
+             password storage; xtream/: HTTP, response normalizers, client
   playback/  player state machine (IDLE → PREPARING → READY → PLAYING/PAUSED/BUFFERING → ERROR/ENDED), HTML5 engine
   screens/   home, live, library, details, player, login, settings, search, collection
   styles/    tokens (colours, radii, scale), base, screens
-tests/       focus geometry, time formats, server addresses
+tests/       focus geometry, time formats, server addresses, Xtream response shapes
 ```
 
 ## TV constraints kept in the code

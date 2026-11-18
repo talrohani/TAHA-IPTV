@@ -1,9 +1,10 @@
 /** Pieces the screens are built from, matching the reference designs. */
 import { h, iconify, lazyImg, onKey, onOk } from './helpers';
 import { icon, iconEl, IconName } from './icons';
-import { t, TextKey } from '../core/i18n';
+import { t, TextKey, failText } from '../core/i18n';
 import { clock, hms } from '../core/dom';
 import { open, openDialog, closeDialog, topName } from '../core/router';
+import { focus, focused, focusables } from '../core/focus';
 import { app } from '../app';
 import type { Entry } from '../data/library';
 import type { Movie, Series } from '../data/types';
@@ -223,6 +224,30 @@ export function vlist<T>(opts: {
     all: () => items,
     refresh() { for (let k = 0; k < rows.length; k++) drawn[k] = -2; draw(); },
   };
+}
+
+/** A list that couldn't load: why, and Try again. */
+export function failBox(err: unknown, retry: () => void, land?: () => HTMLElement | null): HTMLElement {
+  const box = h('div', { cls: 'fail' });
+  const btn = button(t('retry'), 'refresh', () => {
+    const host = box.parentElement;
+    retry();
+    // The button goes away with the retry: once something to focus is back, the remote lands on it
+    // (where `land` says, else the first thing where the box was), unless the screen placed the focus itself.
+    let n = 0;
+    const tick = () => {
+      const f = focused();
+      if (f && f !== btn && document.body.contains(f)) return;
+      const target = land ? land() : host ? focusables(host)[0] : null;
+      if (target) { focus(target); return; }
+      if (++n < 80) setTimeout(tick, 150);
+    };
+    setTimeout(tick, 0);
+  }, 'primary');
+  box.appendChild(h('div', { text: t('loadFailed') }));
+  box.appendChild(h('div', { cls: 'muted', text: failText(err) }));
+  box.appendChild(btn);
+  return box;
 }
 
 // MARK: - Toasts and confirmations

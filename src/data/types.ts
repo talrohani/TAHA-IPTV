@@ -90,6 +90,8 @@ export interface DataSource {
   epg(channel: Channel): Promise<Program[]>;
   movieCategories(): Promise<Category[]>;
   movies(categoryId: string): Promise<Movie[]>;
+  /** A film with its details filled in (plot, cast, length, backdrop), when a page opens. */
+  movieInfo(m: Movie): Promise<Movie>;
   seriesCategories(): Promise<Category[]>;
   series(categoryId: string): Promise<Series[]>;
   seriesInfo(s: Series): Promise<Season[]>;

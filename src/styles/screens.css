@@ -304,7 +304,7 @@
 
 /* MARK: - Login */
 .login .bg { position: absolute; left: 0; top: 0; width: 1920px; height: 620px; background-size: cover; opacity: .9; }
-.login .card { position: absolute; left: 50%; top: 110px; width: 860px; transform: translateX(-50%); padding: 44px 56px 46px; border-radius: var(--r-xl); direction: var(--flow); }
+.login .card { position: absolute; left: 50%; top: 66px; width: 860px; transform: translateX(-50%); padding: 44px 56px 46px; border-radius: var(--r-xl); direction: var(--flow); }
 .login .card .brand { justify-content: center; direction: ltr; margin-bottom: 18px; }
 .login h1 { margin: 0; font-size: 44px; text-align: center; }
 .login .sub { text-align: center; color: var(--text-2); font-size: 26px; margin-bottom: 26px; }
@@ -322,11 +322,22 @@
 .login .msg { min-height: 40px; margin-top: 16px; font-size: 24px; color: var(--text-2); }
 .login .msg.err { color: #FF8A8A; }
 .login .msg.ok { color: #6EE7A0; }
-.login .accounts { position: absolute; left: 50%; top: 880px; transform: translateX(-50%); width: 860px; direction: var(--flow); }
-.acc-row { display: flex; align-items: center; height: 76px; padding: 0 22px; border-radius: var(--r-m); margin-top: 10px; }
-.acc-row .who { flex: 1 1 auto; font-size: 25px; font-weight: 700; direction: ltr; text-align: start; }
+/* Saved accounts: a column beside the form (on the side the form's lines end), up to 5 rows. */
+.login .accounts { position: absolute; left: 50px; top: 66px; width: 440px; max-height: 960px; overflow: hidden; direction: var(--flow); }
+html[dir="ltr"] .login .accounts { left: auto; right: 50px; }
+.acc-row { display: flex; flex-wrap: wrap; align-items: center; padding: 16px 20px; border-radius: var(--r-m); margin-top: 12px; }
+.acc-row .who { flex: 1 1 100%; margin-bottom: 12px; font-size: 25px; font-weight: 700; direction: ltr; text-align: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acc-row .btn { height: 54px; padding: 0 22px; font-size: 22px; }
 .acc-row .btn + .btn { margin-inline-start: 12px; }
+
+.login .card.splash { top: 330px; width: 640px; text-align: center; }
+.login .splash .spin { width: 70px; height: 70px; margin: 26px auto 18px; border-radius: 50%; border: 6px solid rgba(255, 255, 255, 0.18); border-top-color: var(--focus); animation: spin .9s linear infinite; }
+.chan-msg { position: absolute; left: 12px; right: 12px; top: 90px; }
+.chan-msg:empty { display: none; }
+.chans.failed .vlist { visibility: hidden; }
+.chan-msg .fail { background: var(--surface); border-radius: var(--r-m); padding: 60px 30px; }
+.fail { padding: 90px 40px; text-align: center; font-size: 28px; color: var(--text-2); direction: var(--flow); }
+.fail .btn { margin-top: 26px; }
 
 /* MARK: - Settings */
 .set-sections { position: absolute; top: 150px; width: 420px; }

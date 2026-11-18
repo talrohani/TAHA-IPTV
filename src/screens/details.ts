@@ -2,7 +2,7 @@
  * A film's or a series' page: backdrop, poster, facts, plot, actions; for a series, its seasons and episodes
  * (fetched only now: get_series_info), with watched marks and resume points.
  */
-import { h, hints, sectionTitle, posterCard, button, chip, toast } from '../ui/components';
+import { h, hints, sectionTitle, posterCard, button, chip, toast, failBox } from '../ui/components';
 import { icon } from '../ui/icons';
 import { hms, lazyImg } from '../core/dom';
 import { focus, focused } from '../core/focus';
@@ -15,10 +15,11 @@ import type { Screen } from '../core/router';
 import type { Episode, Movie, Season, Series } from '../data/types';
 
 export function details(params?: Record<string, unknown>): Screen {
-  const item = (params && params.item) as Movie | Series;
+  let item = (params && params.item) as Movie | Series;
   const el = h('div', { cls: 'details' });
   const back = h('img', { cls: 'backdrop', attrs: { alt: '' } });
   back.src = item.backdrop;
+  back.onerror = () => { back.style.visibility = 'hidden'; };
   const scroll = h('div', { cls: 'scroll', attrs: { 'data-scroll': 'y', 'data-pad': '160' } });
   el.appendChild(back);
   el.appendChild(h('div', { cls: 'shade' }));
@@ -28,21 +29,37 @@ export function details(params?: Record<string, unknown>): Screen {
 
   const poster = h('img', { cls: 'd-poster', attrs: { alt: '' } });
   poster.src = item.poster;
-  const meta = h('div', { cls: 'meta' }, [
-    h('span', { cls: 'rating', html: icon('star') + ' ' + item.rating.toFixed(1) }),
-    h('span', { text: String(item.year) }),
-    item.kind === 'movie' ? h('span', { text: t('minutes', { n: Math.round(item.duration / 60000) }) }) : null,
-    h('span', { text: item.genres.join('، ') }),
-    h('span', { cls: 'badge' + (item.quality === '4K' ? ' k4' : ''), text: item.quality }),
-  ]);
-  const credits = h('div', { cls: 'credits' }, [
-    item.kind === 'movie' ? h('div', null, [h('b', { text: t('director') + ': ' }), item.director]) : null,
-    h('div', null, [h('b', { text: t('cast') + ': ' }), item.cast.join('، ')]),
-  ]);
+  const meta = h('div', { cls: 'meta' }), plot = h('div', { cls: 'plot' }), credits = h('div', { cls: 'credits' });
+  /** The facts, drawn again when the server's details arrive (only what's known shows). */
+  function drawFacts(): void {
+    meta.innerHTML = '';
+    credits.innerHTML = '';
+    const parts: Array<HTMLElement | null> = [
+      item.rating ? h('span', { cls: 'rating', html: icon('star') + ' ' + item.rating.toFixed(1) }) : null,
+      item.year ? h('span', { text: String(item.year) }) : null,
+      item.kind === 'movie' && item.duration ? h('span', { text: t('minutes', { n: Math.round(item.duration / 60000) }) }) : null,
+      item.genres.length ? h('span', { text: item.genres.join('، ') }) : null,
+      h('span', { cls: 'badge' + (item.quality === '4K' ? ' k4' : ''), text: item.quality }),
+    ];
+    for (const p of parts) if (p) meta.appendChild(p);
+    plot.textContent = item.plot;
+    if (item.kind === 'movie' && item.director) credits.appendChild(h('div', null, [h('b', { text: t('director') + ': ' }), item.director]));
+    if (item.cast.length) credits.appendChild(h('div', null, [h('b', { text: t('cast') + ': ' }), item.cast.join('، ')]));
+  }
+  drawFacts();
   const actions = h('div', { cls: 'actions', group: 'actions' });
   const resumeLine = h('div', { cls: 'resume-line' });
-  const info = h('div', { cls: 'd-info' }, [h('h1', { text: item.name }), meta, h('div', { cls: 'plot', text: item.plot }), credits, resumeLine, actions]);
+  const info = h('div', { cls: 'd-info' }, [h('h1', { text: item.name }), meta, plot, credits, resumeLine, actions]);
   scroll.appendChild(h('div', { cls: 'top' }, [poster, info]));
+  if (item.kind === 'movie') {
+    app.source.movieInfo(item).then((full) => {
+      item = full;
+      if (back.getAttribute('src') !== full.backdrop) { back.style.visibility = ''; back.src = full.backdrop; }
+      if (poster.getAttribute('src') !== full.poster) poster.src = full.poster;
+      drawFacts();
+      drawActions();
+    }, () => { /* the list's facts stay */ });
+  }
 
   const favBtn = button('', 'star', () => {
     const on = toggleFavorite(item);
@@ -128,15 +145,20 @@ export function details(params?: Record<string, unknown>): Screen {
 
   if (item.kind === 'series') {
     scroll.appendChild(epSection);
-    app.source.seriesInfo(item).then((ss) => {
+    const loadSeasons = () => app.source.seriesInfo(item as Series).then((ss) => {
       seasons = ss;
       // The buttons are drawn again with the episode to continue: the focus moves to the new one.
       const f = focused(), wasHere = !f || actions.contains(f) || !document.body.contains(f);
       drawActions();
       if (wasHere) focus(firstBtn);
+      if (!ss.length) { epSection.innerHTML = ''; epSection.appendChild(h('div', { cls: 'empty', text: t('noResults') })); return; }
       const n = nextEpisode();
-      drawEpisodes(n ? n.ep.season : (ss[0] ? ss[0].num : 1));
+      drawEpisodes(n ? n.ep.season : ss[0].num);
+    }, (err) => {
+      epSection.innerHTML = '';
+      epSection.appendChild(failBox(err, () => { epSection.innerHTML = ''; loadSeasons(); }));
     });
+    loadSeasons();
   }
   drawActions();
 

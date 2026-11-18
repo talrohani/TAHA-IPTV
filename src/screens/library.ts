@@ -2,11 +2,11 @@
  * The Library: Movies | Series, genre chips, then either rows (continue watching, recently added, top rated) or,
  * with a genre picked, a poster grid that adds posters as the focus nears the end (no list is built all at once).
  */
-import { h, sidebar, hints, sectionTitle, posterCard, resumeCard, chip, go, toast } from '../ui/components';
+import { h, sidebar, hints, sectionTitle, posterCard, resumeCard, chip, go, toast, failBox } from '../ui/components';
 import { iconEl, IconName } from '../ui/icons';
 import { still } from '../ui/art';
 import { t } from '../core/i18n';
-import { onFocus, focused } from '../core/focus';
+import { onFocus, focused, focus } from '../core/focus';
 import { app } from '../app';
 import { continueWatching, toggleFavorite } from '../data/library';
 import { openEntry, openItem } from './nav';
@@ -101,24 +101,35 @@ export function library(params?: Record<string, unknown>): Screen {
     segMovies.classList.toggle('on', mode === 'movie');
     segSeries.classList.toggle('on', mode === 'series');
     sortLabel.textContent = sortLabelText();
+    const m = mode;
     (mode === 'movie' ? app.source.movieCategories() : app.source.seriesCategories()).then((cats) => {
-      if (destroyed) return;
+      if (destroyed || m !== mode) return;
       renderChips(cats);
       renderBody();
-    });
+    }, (err) => { if (!destroyed && m === mode) showFail(err, render); });
+  }
+
+  function showFail(err: unknown, retry: () => void): void {
+    scroll.innerHTML = '';
+    const box = failBox(err, retry);
+    scroll.appendChild(box);
+    focus(box.querySelector('[data-f]') as HTMLElement);
   }
 
   function renderBody(): void {
+    const m = mode, g = genre;
+    scroll.innerHTML = '';
+    scroll.appendChild(h('div', { cls: 'empty', text: t('loading') }));
     const load = mode === 'movie' ? app.source.movies(genre) : app.source.series(genre);
     load.then((list) => {
-      if (destroyed) return;
+      if (destroyed || m !== mode || g !== genre) return;   // another tab or genre was picked meanwhile
       items = sorted(list as Array<Movie | Series>);
       scroll.innerHTML = '';
       scroll.scrollTop = 0;
       grid = null;
       if (genre === '*') rows();
       else gridView();
-    });
+    }, (err) => { if (!destroyed && m === mode && g === genre) showFail(err, renderBody); });
   }
 
   function section(ic: IconName, title: string, cards: HTMLElement[]): void {
