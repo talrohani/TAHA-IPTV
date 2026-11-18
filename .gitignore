@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.wgt
+*.p12
+*.pwd
+.DS_Store

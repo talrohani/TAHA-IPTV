@@ -1,0 +1,45 @@
+/*
+ * Taha IPTV design system. One 1920 x 1080 stage, scaled to the screen (4K draws it at 2x). Dark navy, purple focus,
+ * electric blue for playback. Chromium 76 (Samsung 2021): CSS variables yes; flex `gap`, `inset`, `aspect-ratio` no.
+ */
+@font-face { font-family: 'Cairo'; src: url('../assets/fonts/Cairo-arabic.woff2') format('woff2'); font-weight: 200 1000; unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FEFC; }
+@font-face { font-family: 'Cairo'; src: url('../assets/fonts/Cairo-latin.woff2') format('woff2'); font-weight: 200 1000; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212; }
+
+:root {
+  --bg: #080F1F;
+  --bg-2: #0B1428;
+  --surface: #111C30;
+  --elev: #19263D;
+  --elev-2: #22314C;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --primary: #8247E5;
+  --primary-2: #6A2FD1;
+  --focus: #A855F7;
+  --focus-glow: rgba(168, 85, 247, 0.55);
+  --blue: #00A8FF;
+  --blue-glow: rgba(0, 168, 255, 0.55);
+  --gold: #F5B83D;
+  --green: #22C55E;
+  --red: #EF4444;
+  --text: #FFFFFF;
+  --text-2: #AAB5C8;
+  --text-3: #6F7C93;
+  --glass: rgba(25, 38, 61, 0.62);
+  --glass-2: rgba(17, 28, 48, 0.78);
+  --r-s: 12px;
+  --r-m: 18px;
+  --r-l: 24px;
+  --r-xl: 32px;
+  --scale: 1;              /* Settings > Font size */
+  --poster-w: 236px;       /* Settings > Poster size */
+  --dur: 160ms;            /* Settings > Animations */
+}
+
+/* Themes (Settings > Theme): the default navy, a deeper midnight, and a warmer violet */
+.theme-midnight { --bg: #05080F; --bg-2: #070C18; --surface: #0C1424; --elev: #131E33; --elev-2: #1B2843; }
+.theme-violet { --bg: #0E0A1F; --bg-2: #130E2A; --surface: #1A1433; --elev: #241B45; --elev-2: #2E2357; }
+
+.anim-reduced { --dur: 80ms; }
+.anim-off { --dur: 0ms; }
+.anim-off *, .anim-off *::before, .anim-off *::after { transition: none !important; animation: none !important; }
