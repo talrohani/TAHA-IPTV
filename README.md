@@ -4,7 +4,7 @@ A fast Xtream Codes player for Samsung Tizen TVs (built for the AU7000, Tizen 6.
 English as an option. Plain TypeScript and CSS, no UI framework; Vite builds it into one classic script that runs on
 the TV's Chromium 76 from the `.wgt` package.
 
-## Status: 1.0.4 — built; on the TV: the 1.0.3 diagnostics build (UA50AU7000UXEG, Tizen 6.0)
+## Status: 1.0.4 — installed on the TV (UA50AU7000UXEG, Tizen 6.0); live preview picture confirmed there by the owner on 2026-11-19
 
 ### 1.0.4: the live preview's picture (black with sound on the TV)
 
