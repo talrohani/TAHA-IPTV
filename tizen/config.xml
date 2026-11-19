@@ -4,7 +4,7 @@
   Privileges: the network (Xtream Codes servers, streams), the remote's extra keys (media, channel, colour, numbers),
   and the Key Manager (where saved passwords go when the TV offers it). AVPlay and the screensaver need none.
 -->
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://tahaiptv.app/tizen" version="1.0.0" viewmodes="maximized">
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://tahaiptv.app/tizen" version="1.0.1" viewmodes="maximized">
     <tizen:application id="TahaIPTV01.TahaIPTV" package="TahaIPTV01" required_version="3.0"/>
     <name>Taha IPTV</name>
     <description>Xtream Codes player</description>

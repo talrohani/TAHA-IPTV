@@ -4,7 +4,27 @@ A fast Xtream Codes player for Samsung Tizen TVs (built for the AU7000, Tizen 6.
 English as an option. Plain TypeScript and CSS, no UI framework; Vite builds it into one classic script that runs on
 the TV's Chromium 76 from the `.wgt` package.
 
-## Status: 1.0.0 — installed on the TV (UA50AU7000UXEG, Tizen 6.0) on 2026-11-19, waiting for the TV check
+## Status: 1.0.1 — installed on the TV (UA50AU7000UXEG, Tizen 6.0); checked there by the owner on 2026-11-19
+
+### 1.0.1: faster on the TV (measured on it)
+
+Moving around felt slow on the TV. Measured there (`src/perf.ts`, `tizen/measure.py`), from a key press to the
+next drawn frame, median (worst):
+
+| | 1.0.0 | 1.0.1 |
+| --- | --- | --- |
+| Home | 93 ms (1,116) | 27 ms (54) |
+| Library | 203 ms (661) | 29 ms (148) |
+| Live TV | 36 ms (118) | 19 ms (64) |
+
+The app's code took 14 ms a key (now 9): the time went into drawing. `styles/lite.css`, on whenever the app runs on
+a TV (`?lite` tries it in a browser): the focus moves at once (no animations), a crisp focus ring instead of a soft
+glow, no large soft shadows, rows and lists jump instead of scrolling smoothly, Home's header on a layer of its own.
+The focus engine also stopped reading computed styles on every key.
+
+To measure again: `TAHA_PERF=1 npm run build`, package, install, wait about 2 minutes (the app moves through Home,
+Live and Library by itself, then shows "measuring done"), `python3 tizen/measure.py <TV IP>`, then install the normal
+build again. The measuring code isn't in normal builds.
 
 All five phases are built: screens (1), Xtream Codes (2), playback (3, confirmed on the TV), persistence and
 optimization (4), and the Tizen package (5). **Installing, updating and troubleshooting: [docs/INSTALL.md](docs/INSTALL.md)**,

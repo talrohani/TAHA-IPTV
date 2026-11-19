@@ -20,7 +20,9 @@ export function stageScale(): number {
 function visible(el: HTMLElement): boolean {
   if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') return false;
   const r = el.getBoundingClientRect();
-  return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+  // No getComputedStyle here: it ran for every focusable on every key press (4 ms a press on the TV). Something
+  // hidden but kept in place (Live's channel list behind an error) is marked data-disabled instead.
+  return r.width > 0 && r.height > 0;
 }
 
 function groupOf(el: HTMLElement): HTMLElement | null {

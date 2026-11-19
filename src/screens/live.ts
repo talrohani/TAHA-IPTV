@@ -108,8 +108,9 @@ export function live(params?: Record<string, unknown>): Screen {
   function fail(err: unknown, retry: () => void): void {
     chanMsg.innerHTML = '';
     chanPanel.classList.add('failed');
+    chans.el.setAttribute('data-disabled', '');   // hidden behind the error: not a place for the focus
     if (countLabel.textContent === t('loading')) countLabel.textContent = t('channels');
-    const box = failBox(err, () => { chanMsg.innerHTML = ''; chanPanel.classList.remove('failed'); retry(); },
+    const box = failBox(err, () => { chanMsg.innerHTML = ''; chanPanel.classList.remove('failed'); chans.el.removeAttribute('data-disabled'); retry(); },
       () => (chanPanel.classList.contains('failed') ? null : chans.el));
     chanMsg.appendChild(box);
     focus(box.querySelector('[data-f]') as HTMLElement);
@@ -130,6 +131,7 @@ export function live(params?: Record<string, unknown>): Screen {
       if (destroyed || cats.item() !== c) return;
       chanMsg.innerHTML = '';
       chanPanel.classList.remove('failed');
+      chans.el.removeAttribute('data-disabled');
       chans.set(list, 0);
       countLabel.textContent = t('channelsCount', { n: list.length });
       if (list[0]) showInfo(list[0]);

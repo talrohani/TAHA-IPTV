@@ -5,6 +5,7 @@
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/screens.css';
+import './styles/lite.css';
 import { registerTizenKeys, keyOf } from './core/keys';
 import { applyDirection } from './core/i18n';
 import { init, register, back, screenKey, onScreenGone } from './core/router';
@@ -13,6 +14,7 @@ import { move, componentKey, activate } from './core/focus';
 import { onSettings, getSettings } from './core/store';
 import { loadWebapis, pickEngine, screensaver, followVisibility } from './playback/tizen';
 import { createMatte } from './playback/matte';
+import { perfInit } from './perf';
 import { app } from './app';
 import { resume } from './session';
 import { home } from './screens/home';
@@ -26,6 +28,11 @@ import { search } from './screens/search';
 import { collection } from './screens/collection';
 
 const stage = document.getElementById('stage')!;
+
+// Lite drawing on the TV (styles/lite.css: no animated focus, no soft shadows); a browser can try it with ?lite.
+if ((window as unknown as { tizen?: unknown }).tizen || /[?&]lite\b/.test(location.search)) {
+  document.documentElement.classList.add('lite');
+}
 
 function fit(): void {
   const k = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
@@ -94,4 +101,5 @@ loadWebapis(() => {
   if (app.player.engineName !== 'HTML5') document.documentElement.classList.add('plane-under');
   followVisibility(app.player);
   resume();
+  if (__PERF__) perfInit();
 });

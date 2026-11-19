@@ -1,0 +1,43 @@
+/*
+ * Lite drawing, on the TV (html.lite; in a browser: ?lite). Measured on the AU7000 (Tizen 6.0), from a key press to
+ * the next drawn frame: Home 93 ms → 34 ms and Library 203 ms → 46 ms without animations and soft shadows, the worst
+ * frames from over a second to about 0.1-0.2 s. Its graphics chip repaints soft (blurred) shadows and animated
+ * focus changes slowly, frame after frame; the app's own code takes 15 ms per key.
+ *
+ *  - No transitions: the focus moves at once. Only fades of layers of their own stay (player controls, toasts).
+ *  - Focus: a crisp ring (a spread shadow, no blur, follows the rounded corners), no glow.
+ *  - No large soft shadows under panels and posters.
+ *  - Rows and lists jump instead of scrolling smoothly (each smooth step repainted the whole row).
+ *  - Home's header picture on its own layer: drawn once, not again as the focus moves below it.
+ */
+.lite *, .lite *::before, .lite *::after { transition: none !important; }
+.lite .player .ov { transition: opacity .2s !important; will-change: opacity; }
+.lite .toast { transition: opacity .2s !important; will-change: opacity; }
+.lite .player .spinner i, .lite .login .splash .spin { will-change: transform; }
+
+.lite .track, .lite .home .main, .lite .lib-scroll, .lite .details .scroll, .lite .set-rows, .lite .results { scroll-behavior: auto !important; }
+
+.lite .home .hero { will-change: transform; }
+
+/* Focus ring: crisp, no glow */
+.lite .is-focused { box-shadow: 0 0 0 3px var(--focus); }
+.lite .poster-card.is-focused, .lite .vlist.is-focused, .lite .field.is-focused, .lite .check.is-focused,
+.lite .set-row.is-focused, .lite .ctl.is-focused, .lite .player .seekbar.is-focused { box-shadow: none; }
+.lite .btn.danger.is-focused { box-shadow: 0 0 0 3px #F87171; }
+.lite .shortcut.is-focused { box-shadow: 0 0 0 3px #7FF0FF; }
+.lite .poster-card.is-focused .poster-frame { box-shadow: 0 0 0 3px var(--focus); }
+.lite .vlist.is-focused .vrow.sel { box-shadow: none; }
+.lite .preview.is-focused { box-shadow: 0 0 0 3px var(--focus); }
+.lite .preview.on { box-shadow: 0 0 0 14px var(--bg); }
+.lite .preview.on.is-focused { box-shadow: 0 0 0 3px var(--focus), 0 0 0 14px var(--bg); }
+.lite .ep-card.is-focused { box-shadow: 0 0 0 3px var(--focus); }
+.lite .ctl.box.is-focused .ic-wrap { box-shadow: none; }
+.lite .ctl.main.is-focused { box-shadow: 0 0 0 3px var(--blue); }
+.lite .field.is-focused input { box-shadow: 0 0 0 3px var(--focus); }
+
+/* No large soft shadows */
+.lite .glass { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.lite .tab.on, .lite .acct-status .dot, .lite .details .d-poster, .lite .player .seekbar .fill { box-shadow: none; }
+.lite .player .seekbar .knob { box-shadow: 0 0 0 6px rgba(0, 168, 255, 0.35); }
+.lite .player .seekbar.choosing .knob { box-shadow: 0 0 0 8px rgba(0, 168, 255, 0.4); }
+.lite .player .subs span { text-shadow: none; }
