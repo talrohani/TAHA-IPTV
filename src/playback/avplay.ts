@@ -126,18 +126,26 @@ export class AvplayEngine implements Engine {
   }
 
   /**
-   * The display area, then the display method (letterbox or fill), always as a pair: at open (IDLE), again once
-   * the stream is prepared (READY: the picture's size is known then), on every move, and after the app comes back.
-   * On the TV the live preview stayed black with sound while the full screen showed, and the one difference was
-   * when the area was set: the preview's only before prepare, the full screen's during playback. Hence the call
-   * after prepare (the diagnostics build, tizen/diag.py, shows each call and AVPlay's answer).
+   * The display area, then the display method, always as a pair: at open (IDLE), again once the stream is prepared,
+   * on every move, and after the app comes back.
    */
   private display(why: string): void {
     const s = clampRect(screenRect(this.rect)) || screenRect(this.rect), st = this.state();
     let rectOk = true, err = '';
     try { this.av.setDisplayRect(s.x, s.y, s.w, s.h); } catch (e) { rectOk = false; err = errName(e); }
     this.applyFill();
-    diag('display', { why, state: st, stage: this.rect, tv: s, ok: rectOk, err, method: this.fill ? 'FULL_SCREEN' : 'LETTER_BOX', object: boxOf(this.el) });
+    diag('display', { why, state: st, stage: this.rect, tv: s, ok: rectOk, err, method: this.method(), object: boxOf(this.el) });
+  }
+
+  /**
+   * Letterbox only for the full screen (or fill when asked there); a smaller area always gets FULL_SCREEN (the
+   * picture fills the area). Measured on the AU7000 (Tizen 6.0), diagnostics build: LETTER_BOX drew nothing at all
+   * in the live preview's 896 x 520 (not 16:9: sound, black, even with the page hidden), while it drew in 1920 x 1080
+   * and in a 960 x 540 test area (both exactly 16:9); FULL_SCREEN in the same 896 x 520 showed the picture at once.
+   * The preview is within 3 % of 16:9, so a 16:9 channel isn't visibly stretched in it.
+   */
+  private method(): 'PLAYER_DISPLAY_MODE_FULL_SCREEN' | 'PLAYER_DISPLAY_MODE_LETTER_BOX' {
+    return this.fill || !isFull(this.rect) ? 'PLAYER_DISPLAY_MODE_FULL_SCREEN' : 'PLAYER_DISPLAY_MODE_LETTER_BOX';
   }
 
   open(url: string, o: OpenOptions, ev: EngineEvents): void {
@@ -243,7 +251,7 @@ export class AvplayEngine implements Engine {
 
   setFill(fill: boolean): void { this.fill = fill; this.applyFill(); }
   private applyFill(): void {
-    try { this.av.setDisplayMethod(this.fill ? 'PLAYER_DISPLAY_MODE_FULL_SCREEN' : 'PLAYER_DISPLAY_MODE_LETTER_BOX'); } catch { /* not yet */ }
+    try { this.av.setDisplayMethod(this.method()); } catch { /* not yet */ }
   }
 
   suspend(): void { try { this.av.suspend(); } catch { /* nothing open */ } }

@@ -259,11 +259,11 @@ describe('AVPlay engine', () => {
       'setBufferingParam(PLAYER_BUFFER_FOR_PLAY,PLAYER_BUFFER_SIZE_IN_SECOND,3)',
       'setBufferingParam(PLAYER_BUFFER_FOR_RESUME,PLAYER_BUFFER_SIZE_IN_SECOND,5)',
       'setStreamingProperty(SET_MODE_4K,TRUE)', 'setDisplayRect(998,138,896,520)',
-      'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)', 'prepareAsync']);
+      'setDisplayMethod(PLAYER_DISPLAY_MODE_FULL_SCREEN)', 'prepareAsync']);
     f.prepare()!.ok();
-    // Once prepared, the display area and method again (the preview's area set only before prepare stayed black).
+    // Once prepared, the display area and method again.
     expect(f.calls.slice(-5)).toEqual(['setSilentSubtitle(true)', 'setDisplayRect(998,138,896,520)',
-      'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)', 'seekTo(61000)', 'play']);
+      'setDisplayMethod(PLAYER_DISPLAY_MODE_FULL_SCREEN)', 'seekTo(61000)', 'play']);
     expect(log).toEqual(['ready', 'playing']);
   });
 
@@ -276,15 +276,30 @@ describe('AVPlay engine', () => {
     f.calls.length = 0;
     e.place({ x: 0, y: 0, w: 1920, h: 1080 });
     e.place(PREVIEW);
+    // Full screen letterboxed; the preview filled (LETTER_BOX drew nothing in the 896 x 520 preview on the AU7000).
     expect(f.calls).toEqual(['setDisplayRect(0,0,1920,1080)', 'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)',
-      'setDisplayRect(998,138,896,520)', 'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)']);
+      'setDisplayRect(998,138,896,520)', 'setDisplayMethod(PLAYER_DISPLAY_MODE_FULL_SCREEN)']);
     // A box with no size yet (not laid out) is refused: the picture stays where it was.
     e.place({ x: 998, y: 138, w: 0, h: 0 });
     expect(f.calls.length).toBe(4);
     // Back from the background: restored, and its area set again.
     e.restore();
-    expect(f.calls.slice(-3)).toEqual(['restore', 'setDisplayRect(998,138,896,520)', 'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)']);
+    expect(f.calls.slice(-3)).toEqual(['restore', 'setDisplayRect(998,138,896,520)', 'setDisplayMethod(PLAYER_DISPLAY_MODE_FULL_SCREEN)']);
     expect(f.calls).not.toContain('open');
+  });
+
+  it("keeps the full screen's picture setting (letterbox or fill) and never letterboxes a smaller area", () => {
+    const f = fakeAv(), log: string[] = [], e = new AvplayEngine(f.av);
+    e.open('film', { startAt: 0, live: false, buffer: 'auto', uhd: false }, events(log));
+    f.prepare()!.ok();
+    f.calls.length = 0;
+    e.setFill(true);
+    e.setFill(false);
+    e.place({ x: 998, y: 138, w: 896, h: 520 });
+    e.setFill(false);
+    expect(f.calls.filter((c) => c.indexOf('setDisplayMethod') === 0)).toEqual(['setDisplayMethod(PLAYER_DISPLAY_MODE_FULL_SCREEN)',
+      'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)', 'setDisplayMethod(PLAYER_DISPLAY_MODE_FULL_SCREEN)',
+      'setDisplayMethod(PLAYER_DISPLAY_MODE_FULL_SCREEN)']);
   });
 
   it('starts a live channel at once (no seek), and reports no length for it', () => {

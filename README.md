@@ -4,16 +4,22 @@ A fast Xtream Codes player for Samsung Tizen TVs (built for the AU7000, Tizen 6.
 English as an option. Plain TypeScript and CSS, no UI framework; Vite builds it into one classic script that runs on
 the TV's Chromium 76 from the `.wgt` package.
 
-## Status: 1.0.3 — built and checked in the browser; on the TV: 1.0.1 (UA50AU7000UXEG, Tizen 6.0), checked there by the owner on 2026-11-19
+## Status: 1.0.4 — built; on the TV: the 1.0.3 diagnostics build (UA50AU7000UXEG, Tizen 6.0)
 
-### 1.0.3: the live preview's picture (black with sound on the TV)
+### 1.0.4: the live preview's picture (black with sound on the TV)
 
-What was ruled out: the page over the preview is clear (with the TV's transparent page forced in a browser and a
-red backdrop under it, the whole preview window shows red), and the rectangle is right by Samsung's rule (1920 x 1080
-whatever the page's size; the TV reported a 1920x1080 page at 1×, so AVPlay got 998, 138, 896, 520). The difference
-left: the preview's area was set only before prepare, the full screen's during playback. Now (`playback/avplay.ts`)
-the area and the display method are set as a pair at open, again once prepared, on every move and after the app
-comes back; `playback/rect.ts` holds the conversions, refuses a box with no size, and Live measures its preview box.
+Cause, found on the TV with the diagnostics build: AVPlay's LETTER_BOX display method draws nothing on the AU7000
+when the display area isn't 16:9. The preview is 896 x 520 (1.72:1): sound, no picture, even with the whole page
+hidden. LETTER_BOX drew in 1920 x 1080 and in a 960 x 540 test area (both 16:9), and FULL_SCREEN drew in the
+preview's own 896 x 520 at once. Now the full screen keeps letterbox (or fill, Settings › picture), and any smaller
+area gets FULL_SCREEN (`playback/avplay.ts`, `method()`): a 16:9 channel is within 3 % of the preview's shape.
+
+Ruled out on the way, also on the TV: the page over the preview (every layer transparent), the rectangle (the TV's
+page is 1920x1080 at 1×, AVPlay accepted 998, 138, 896, 520 each time), when it is set (before and after prepare,
+during playback), the stage's transform, the preview's frame, where the `<object>` sits and its size.
+
+Also from this work: the area and the method are set as a pair at open, once prepared, on every move and after the
+app comes back; `playback/rect.ts` holds the conversions and refuses a box with no size; Live measures its preview.
 
 To see what AVPlay is told and answers, on the TV: `TAHA_DIAG=1 npm run build`, package, install, play a channel
 (preview, full screen, back), then `python3 tizen/diag.py <TV IP>`; install the normal build again after. The log has
