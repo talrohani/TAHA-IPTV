@@ -123,6 +123,10 @@ class Sdb:
 
 
 def main():
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')   # a Windows console's code page
+    except AttributeError:
+        pass
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     if len(args) != 1:
         sys.exit(__doc__)
