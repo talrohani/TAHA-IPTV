@@ -4,7 +4,21 @@ A fast Xtream Codes player for Samsung Tizen TVs (built for the AU7000, Tizen 6.
 English as an option. Plain TypeScript and CSS, no UI framework; Vite builds it into one classic script that runs on
 the TV's Chromium 76 from the `.wgt` package.
 
-## Status: 1.0.1 — installed on the TV (UA50AU7000UXEG, Tizen 6.0); checked there by the owner on 2026-11-19
+## Status: 1.0.2 — built and checked in the browser; on the TV: 1.0.1 (UA50AU7000UXEG, Tizen 6.0), checked there by the owner on 2026-11-19
+
+### 1.0.2: the player's buttons with the remote
+
+On the TV the remote couldn't reach the player's buttons. ↓ on the seek bar was read as a number key ('down' starts
+with 'd', like 'd0'–'d9'): it asked for a seek to NaN instead of moving down. OK with the overlay hidden paused the
+film (the seek bar kept the focus while hidden), and the overlay hid behind an open sheet.
+
+Now (`src/screens/player.ts`): the overlay is rows, top to bottom: back · previous/next · seek bar · buttons. ↑ ↓ go
+from row to row (rows not shown are skipped, a chosen seek point is dropped on the way), ← → along a row (the ends
+stop). Hidden overlay: OK only brings it back; ← → (films) and ↑ ↓ (live) keep their shortcuts. Modes:
+NORMAL_NAVIGATION, SEEK_MODE (a point chosen: ← → OK Back), MENU_OPEN (a sheet: the overlay stays; Back returns the
+focus to its button). Settings › speed and picture: ← → or OK change them in place. Previous at the first episode and
+next at the last say so; the last episode's end leaves the player, as a film's does. Quality says Auto: neither
+engine offers a choice of renditions.
 
 ### 1.0.1: faster on the TV (measured on it)
 

@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { best, score, type Box } from '../src/core/spatial';
 import { hms } from '../src/core/dom';
 import { normalizeServer } from '../src/screens/login';
+import { digitOf } from '../src/core/keys';
+
+describe('remote keys', () => {
+  it('reads number keys, and never takes ↓ (down) for one', () => {
+    expect(digitOf('d0')).toBe(0);
+    expect(digitOf('d7')).toBe(7);
+    expect(digitOf('down')).toBeNull();
+    expect(digitOf('d')).toBeNull();
+    expect(digitOf('d12')).toBeNull();
+    expect(digitOf('ok')).toBeNull();
+  });
+});
 
 const box = (left: number, top: number, w: number, h: number): Box => ({ left, top, right: left + w, bottom: top + h });
 

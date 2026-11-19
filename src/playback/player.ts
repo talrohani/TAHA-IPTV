@@ -236,7 +236,7 @@ export class Player {
 
   /** To ms; one seek at a time, the newest target kept while one runs. done(false) leaves it where it was. */
   seek(ms: number, done?: (ok: boolean) => void): void {
-    if (!this.canSeek()) { if (done) done(false); return; }
+    if (!this.canSeek() || !isFinite(ms)) { if (done) done(false); return; }
     const d = this.engine.duration();
     ms = Math.max(0, Math.min(d - 1500, ms));
     if (this.seeking) { this.queued = { ms, done }; return; }

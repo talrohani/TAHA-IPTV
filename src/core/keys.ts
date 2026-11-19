@@ -40,6 +40,11 @@ export function registerTizenKeys(): void {
   }
 }
 
+/** 0–9 for a number key ('d0'…'d9'), else null. Not `key.charAt(0) === 'd'`: that matched 'down' too. */
+export function digitOf(key: string): number | null {
+  return /^d[0-9]$/.test(key) ? parseInt(key.charAt(1), 10) : null;
+}
+
 const BROWSER: Record<string, Key> = { ' ': 'playpause', a: 'red', b: 'green', c: 'yellow', d: 'blue', '[': 'rw', ']': 'ff', i: 'info' };
 
 export function keyOf(e: KeyboardEvent): Key | null {

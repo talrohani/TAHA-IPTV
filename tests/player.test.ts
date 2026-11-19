@@ -164,6 +164,18 @@ describe('Player', () => {
     expect(e.seeks[0].ms).toBe(600000 - 1500);
   });
 
+  it('never hands the engine a target that is not a number (the old ↓ key asked for NaN)', () => {
+    const { e, p } = setup();
+    p.play('film', { rect: RECT, live: false });
+    e.ev!.playing();
+    const answers: boolean[] = [];
+    p.seek(NaN, (ok) => answers.push(ok));
+    p.seek(Infinity, (ok) => answers.push(ok));
+    expect(answers).toEqual([false, false]);
+    expect(e.seeks).toEqual([]);
+    expect(p.busy).toBe(false);
+  });
+
   it('takes a film up where it was after the app comes back, and opens a live channel again', () => {
     const { e, p } = setup();
     p.play('film', { rect: RECT, live: false });

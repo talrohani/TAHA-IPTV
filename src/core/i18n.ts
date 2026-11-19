@@ -46,6 +46,7 @@ const AR = {
   connectedAs: 'متصل: {u}',
   reconnecting: 'انقطع البث، جارٍ إعادة الاتصال...', trackN: 'المسار {n}', noTracks: 'لا توجد مسارات أخرى في هذا البث',
   notHere: 'غير متاح في هذا البث', codec: 'الترميز', video: 'الصورة',
+  firstEpisode: 'هذه أول حلقة', lastEpisode: 'هذه آخر حلقة',
   gone: 'لم يعد هذا متاحًا لدى مزوّد الخدمة', removed: 'أُزيل', recentChannels: 'شوهدت مؤخرًا', remove: 'إزالة',
   saved: 'المحفوظ على التلفزيون', savedCount: '{f} مفضلة · {h} في السجل · {r} نقطة استئناف',
 };
@@ -94,6 +95,7 @@ const EN: Dict = {
   connectedAs: 'Connected: {u}',
   reconnecting: 'The stream dropped, reconnecting...', trackN: 'Track {n}', noTracks: 'This stream has no other tracks',
   notHere: 'Not available for this stream', codec: 'Codec', video: 'Picture',
+  firstEpisode: 'This is the first episode', lastEpisode: 'This is the last episode',
   gone: 'Your provider no longer has this', removed: 'Removed', recentChannels: 'Recently watched', remove: 'Remove',
   saved: 'Saved on the TV', savedCount: '{f} favorites · {h} in history · {r} resume points',
 };

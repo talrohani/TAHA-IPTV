@@ -5,18 +5,28 @@
  *
  * Seek bar: ← → move a point along it without touching playback (held: bigger steps), OK jumps there, Back drops
  * it. Live channels have no seek bar (no fake timeline): ↑ ↓ and the channel keys change channel instead.
+ *
+ * The remote, in three modes (mode()):
+ *   NORMAL_NAVIGATION  the overlay's rows, top to bottom: back · previous/next · seek bar · controls. ↑ ↓ go from
+ *                      row to row (a row that isn't shown is skipped), ← → along a row, OK presses. Hidden overlay:
+ *                      the first key brings it back on the seek bar (or play/pause, or a live channel's arrows);
+ *                      ← → (films) and ↑ ↓ (live) keep their shortcuts.
+ *   SEEK_MODE          a point chosen on the seek bar: ← → move it, OK jumps, Back drops it; ↑ ↓ drop it and move.
+ *   MENU_OPEN          a side sheet: its own layer (↑ ↓, OK, ← → on a value, Back closes it and the focus goes back
+ *                      to the button that opened it). The overlay stays up all the while.
  */
 import { h, toast } from '../ui/components';
 import { iconEl, icon, IconName } from '../ui/icons';
 import { hms, clock, onKey } from '../core/dom';
 import { t, errorText } from '../core/i18n';
-import { openDialog, closeDialog, back } from '../core/router';
-import { focus, focused, focusGroup } from '../core/focus';
+import { openDialog, closeDialog, back, hasDialog } from '../core/router';
+import { focus, focused, onFocus } from '../core/focus';
 import { getSettings } from '../core/store';
 import { app } from '../app';
 import { record, markDone, isFavorite, toggleFavorite } from '../data/library';
 import type { Screen } from '../core/router';
 import type { Channel, Episode, Movie, Program, Series } from '../data/types';
+import { digitOf } from '../core/keys';
 import type { Key } from '../core/keys';
 import type { Track } from '../playback/player';
 import { isLang, langName } from '../playback/lang';
@@ -208,14 +218,75 @@ export function player(params?: Record<string, unknown>): Screen {
     armHide();
     draw();
   }
+  function mode(): 'NORMAL_NAVIGATION' | 'SEEK_MODE' | 'MENU_OPEN' {
+    return hasDialog() ? 'MENU_OPEN' : seek.on ? 'SEEK_MODE' : 'NORMAL_NAVIGATION';
+  }
+  /** The overlay stays while a point is being chosen, a seek runs, a sheet is open, or the stream is paused/failed. */
+  function held(): boolean { return mode() !== 'NORMAL_NAVIGATION' || busy; }
   function hide(): void {
-    if (seek.on || busy || p.state === 'PAUSED' || p.state === 'ERROR') return;
+    if (held() || p.state === 'PAUSED' || p.state === 'ERROR') return;
     uiOn = false;
     el.classList.add('hidden-ui');
   }
   function armHide(): void {
     clearTimeout(hideTimer);
-    hideTimer = window.setTimeout(() => { if (seek.on || busy) armHide(); else hide(); }, HIDE_AFTER);
+    hideTimer = window.setTimeout(() => { if (held()) armHide(); else hide(); }, HIDE_AFTER);
+  }
+
+  // MARK: remote focus in the overlay: rows, top to bottom
+
+  const shown = (e: HTMLElement) => !e.hasAttribute('data-disabled') && e.offsetParent !== null;
+  const midX = (e: HTMLElement) => { const r = e.getBoundingClientRect(); return (r.left + r.right) / 2; };
+  const ctls = () => Array.prototype.slice.call(controls.querySelectorAll('[data-f]')) as HTMLElement[];
+  /** The row an element is in (0 back, 1 side arrows, 2 seek bar, 3 controls), or -1 (the error box). */
+  function rowOf(e: HTMLElement | null): number {
+    return !e ? -1 : e === backBtn ? 0 : e === prevBtn || e === nextBtn ? 1 : e === seekbar ? 2 : controls.contains(e) ? 3 : -1;
+  }
+  function row(i: number): HTMLElement[] {
+    return (i === 0 ? [backBtn] : i === 1 ? [prevBtn, nextBtn] : i === 2 ? (hasBar() ? [seekbar] : []) : ctls()).filter(shown);
+  }
+  /** Where each row was left (coming back to a row lands there). */
+  const lastIn: Array<HTMLElement | null> = [null, null, null, null];
+  const offFocus = onFocus((e) => { const r = rowOf(e); if (r >= 0) lastIn[r] = e; });
+
+  /** The element of `list` nearest to x, or the one closest that way (dir ±1) from `from`. */
+  function nearest(list: HTMLElement[], x: number, dir?: number, from?: HTMLElement): HTMLElement | null {
+    let best: HTMLElement | null = null, low = Infinity;
+    for (const e of list) {
+      if (e === from) continue;
+      const d = (midX(e) - x) * (dir || 1);
+      if (dir ? d > 1 && d < low : Math.abs(d) < low) { low = dir ? d : Math.abs(d); best = e; }
+    }
+    return best;
+  }
+
+  /** ↑ ↓ ← → in the overlay; false leaves it to the focus engine (the error box). */
+  function navigate(key: 'up' | 'down' | 'left' | 'right'): boolean {
+    if (errBox.classList.contains('on')) return false;
+    const f = focused(), r = rowOf(f);
+    if (r < 0 || !f || !shown(f)) { focus(home()); return true; }   // nothing focused, or it went (a disabled ±30)
+    if (key === 'left' || key === 'right') {
+      const next = nearest(row(r), midX(f), key === 'right' ? 1 : -1, f);
+      if (next) focus(next);
+      return true;                                  // the ends of a row: the focus stays
+    }
+    if (f === seekbar && seek.on) { cancelSeek(); draw(); }   // leaving the bar drops a chosen point
+    for (let i = r + (key === 'down' ? 1 : -1); i >= 0 && i <= 3; i += key === 'down' ? 1 : -1) {
+      const list = row(i);
+      if (!list.length) continue;
+      const m = lastIn[i];
+      focus(m && list.indexOf(m) >= 0 ? m : nearest(list, midX(f)));
+      return true;
+    }
+    return true;
+  }
+
+  /** Where the focus goes when the overlay comes back: the seek bar, else play/pause, else a live channel's arrows. */
+  function home(): HTMLElement {
+    if (hasBar()) return seekbar;
+    if (!isLive()) return playCtl;
+    const side = row(1);
+    return lastIn[1] && side.indexOf(lastIn[1]) >= 0 ? lastIn[1] : side[side.length - 1] || backBtn;
   }
 
   function draw(): void {
@@ -261,6 +332,7 @@ export function player(params?: Record<string, unknown>): Screen {
   function commitSeek(): void { if (!seek.on) return; const to = seek.pos; cancelSeek(); jumpTo(to); }
   function jump(by: number): void { jumpTo((busy && pending !== null ? pending : p.time()) + by); }
   function jumpTo(ms: number): void {
+    if (!isFinite(ms)) return;
     if (!hasBar()) { toast(t('noSeek')); return; }
     cancelSeek();
     pending = Math.max(0, Math.min(p.duration() - 1500, ms));
@@ -279,19 +351,24 @@ export function player(params?: Record<string, unknown>): Screen {
 
   onKey(seekbar, (key) => {
     if (key === 'left' || key === 'right') { scrub(key === 'right' ? 1 : -1); return true; }
-    if (key === 'ok') { if (seek.on) commitSeek(); else p.toggle(); show(); return true; }
+    // OK with the overlay hidden only brings it back (it used to pause: the seek bar keeps the focus while hidden).
+    if (key === 'ok') { if (!uiOn) show(); else { if (seek.on) commitSeek(); else p.toggle(); show(); } return true; }
     return false;
   });
 
   // MARK: actions
 
-  function step(d: number): void {
+  function step(d: number, auto?: boolean): void {
     if (isLive()) { zap(d); return; }
     if (item.kind !== 'episode' || !series || !series.seasons) return;
     const all: Episode[] = [];
     for (const s of series.seasons) for (const e of s.episodes) all.push(e);
-    const i = all.findIndex((e) => e.id === item.id), next = all[i + d];
-    if (!next) return;
+    const i = all.findIndex((e) => e.id === item.id), next = i < 0 ? undefined : all[i + d];
+    if (!next) {
+      if (auto) leave();                            // the last episode ended: out of the player, as a film does
+      else { toast(d > 0 ? t('lastEpisode') : t('firstEpisode')); show(); }
+      return;
+    }
     saveNow();
     item = next;
     start(0);
@@ -328,15 +405,34 @@ export function player(params?: Record<string, unknown>): Screen {
 
   // MARK: side sheets (Back closes them)
 
-  function sheet(ic: IconName, title: string, rows: Array<{ label: string; end?: string; on?: boolean; run: () => void }>): void {
+  /**
+   * A side sheet. A row with `value` is a setting changed in place: OK steps it round, ← → step it down / up, and
+   * the focus stays on it. The overlay stays while the sheet is open; Back (or a choice) closes it and the focus
+   * goes back to the button that opened it.
+   */
+  interface Row { label: string; end?: string; on?: boolean; run: () => void; value?: () => string; adjust?: (dir: number) => void }
+  function sheet(ic: IconName, title: string, rows: Row[]): void {
+    if (seek.on) { cancelSeek(); draw(); }
     const box = h('div', { cls: 'sheet' }, [h('h3', null, [iconEl(ic), h('span', { text: title })])]);
     let first: HTMLElement | undefined;
     for (const r of rows) {
-      const o = h('div', { cls: 'opt' + (r.on ? ' on' : ''), focus: true, onOk: () => { r.run(); } }, [h('span', { text: r.label }), r.end ? h('span', { cls: 'end', text: r.end }) : null]);
+      const end = r.value ? h('span', { cls: 'end', text: r.value() }) : r.end ? h('span', { cls: 'end', text: r.end }) : null;
+      const redraw = () => { if (end && r.value) end.textContent = r.value(); };
+      const o = h('div', { cls: 'opt' + (r.on ? ' on' : ''), focus: true, onOk: () => { r.run(); redraw(); } }, [h('span', { text: r.label }), end]);
+      if (r.adjust) {
+        const adjust = r.adjust;
+        onKey(o, (key) => {
+          if (key !== 'left' && key !== 'right') return false;
+          adjust(key === 'right' ? 1 : -1);
+          redraw();
+          return true;
+        });
+      }
       if (r.on && r.end === undefined) o.appendChild(h('span', { cls: 'end', html: icon('check') }));
       box.appendChild(o);
       if (!first || r.on) first = o;
     }
+    show();
     openDialog(box, { first, onClose: () => show() });
   }
 
@@ -416,21 +512,19 @@ export function player(params?: Record<string, unknown>): Screen {
 
   let speed = 1, aspect: 'normal' | 'fill' = 'normal';
   function settingsSheet(): void {
-    const rows: Array<{ label: string; end?: string; run: () => void }> = [
+    // Quality: neither engine offers a choice of renditions (AVPlay picks the bitrate of an adaptive stream by
+    // itself), so the row says Auto rather than listing made-up options.
+    const rows: Row[] = [
       { label: t('quality'), end: t('auto'), run: () => toast(t('quality') + ': ' + t('auto')) },
     ];
     // Speed only where the engine plays other speeds with sound, and never on a live channel.
     const speeds = p.speeds();
-    if (speeds.length > 1 && !isLive()) rows.push({ label: t('speed'), end: speed + '×', run: () => {
-      const next = speeds[(speeds.indexOf(speed) + 1) % speeds.length];
-      if (p.setSpeed(next)) speed = next;
-      closeDialog(); settingsSheet();
-    } });
-    rows.push({ label: t('aspect'), end: t(aspect), run: () => {
-      aspect = aspect === 'normal' ? 'fill' : 'normal';
-      p.setFill(aspect === 'fill');
-      closeDialog(); settingsSheet();
-    } });
+    const setSpeed = (i: number) => { const next = speeds[i]; if (next !== undefined && next !== speed && p.setSpeed(next)) speed = next; };
+    if (speeds.length > 1 && !isLive()) rows.push({ label: t('speed'), value: () => speed + '×',
+      run: () => setSpeed((speeds.indexOf(speed) + 1) % speeds.length),
+      adjust: (dir) => setSpeed(Math.max(0, Math.min(speeds.length - 1, speeds.indexOf(speed) + dir))) });
+    const flipAspect = () => { aspect = aspect === 'normal' ? 'fill' : 'normal'; p.setFill(aspect === 'fill'); };
+    rows.push({ label: t('aspect'), value: () => t(aspect), run: flipAspect, adjust: flipAspect });
     sheet('settings', t('settings'), rows);
   }
 
@@ -455,7 +549,7 @@ export function player(params?: Record<string, unknown>): Screen {
     }
     if (st === 'ENDED' && !isLive()) {
       markDone(item as Movie | Episode, p.duration());   // watched: the series moves on, Continue Watching lets it go
-      if (item.kind === 'episode') { step(1); return; }
+      if (item.kind === 'episode') { step(1, true); return; }
       leave();
       return;
     }
@@ -476,7 +570,7 @@ export function player(params?: Record<string, unknown>): Screen {
 
   return {
     el,
-    first: () => (isLive() ? playCtl : seekbar),
+    first: () => (isLive() ? home() : seekbar),
     onKey(key: Key, repeat: boolean) {
       void repeat;
       // Hidden overlay: the first key brings it back (and acts, for the keys that have a meaning without it).
@@ -487,7 +581,7 @@ export function player(params?: Record<string, unknown>): Screen {
         if (key === 'chup' || key === 'chdown') { if (isLive()) zap(key === 'chup' ? 1 : -1); show(); return true; }
         show();
         if (key === 'ok' || key === 'up' || key === 'down' || key === 'left' || key === 'right') {
-          focus(hasBar() ? seekbar : playCtl);
+          if (!errBox.classList.contains('on')) focus(home());
           return true;
         }
       }
@@ -500,11 +594,9 @@ export function player(params?: Record<string, unknown>): Screen {
       if (key === 'yellow') { settingsSheet(); return true; }
       if (key === 'blue') { episodesSheet(); return true; }
       if (key === 'info') { infoSheet(); return true; }
-      if (key.charAt(0) === 'd' && hasBar()) { jumpTo(p.duration() * parseInt(key.slice(1), 10) / 10); return true; }
-      // Up from the controls onto the seek bar, and down again, without passing the side arrows.
-      const f = focused();
-      if (key === 'up' && f && controls.contains(f) && hasBar()) { focus(seekbar); return true; }
-      if (key === 'down' && f === seekbar) { focusGroup(controls); return true; }
+      const digit = digitOf(key);
+      if (digit !== null) { if (hasBar()) jumpTo(p.duration() * digit / 10); return true; }
+      if (key === 'up' || key === 'down' || key === 'left' || key === 'right') return navigate(key);
       return false;
     },
     onBack() {
@@ -517,6 +609,7 @@ export function player(params?: Record<string, unknown>): Screen {
       saveNow();
       off();
       offText();
+      offFocus();
       clearSubs();
       if (aspect === 'fill') p.setFill(false);
       clearInterval(tick);
