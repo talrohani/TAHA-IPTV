@@ -15,6 +15,7 @@ import { onSettings, getSettings } from './core/store';
 import { loadWebapis, pickEngine, screensaver, followVisibility } from './playback/tizen';
 import { createMatte } from './playback/matte';
 import { perfInit } from './perf';
+import { diag } from './diag';
 import { app } from './app';
 import { resume } from './session';
 import { home } from './screens/home';
@@ -100,6 +101,14 @@ loadWebapis(() => {
   app.player.use({ matte: createMatte(videoHost), screensaver, buffer: () => getSettings().buffer });
   if (app.player.engineName !== 'HTML5') document.documentElement.classList.add('plane-under');
   followVisibility(app.player);
+  if (__DIAG__) {
+    const s = stage.getBoundingClientRect();
+    diag('start', { version: __APP_VERSION__, engine: app.player.engineName, planeUnder: document.documentElement.classList.contains('plane-under'),
+      window: window.innerWidth + 'x' + window.innerHeight, client: document.documentElement.clientWidth + 'x' + document.documentElement.clientHeight,
+      screen: screen.width + 'x' + screen.height, dpr: window.devicePixelRatio || 1,
+      stage: { x: Math.round(s.left), y: Math.round(s.top), w: Math.round(s.width), h: Math.round(s.height) },
+      chrome: (/Chrome\/\d+/.exec(navigator.userAgent) || [''])[0] });
+  }
   resume();
   if (__PERF__) perfInit();
 });

@@ -30,8 +30,8 @@ import { digitOf } from '../core/keys';
 import type { Key } from '../core/keys';
 import type { Track } from '../playback/player';
 import { isLang, langName } from '../playback/lang';
+import { FULL } from '../playback/rect';
 
-const FULL = { x: 0, y: 0, w: 1920, h: 1080 };
 
 function trackName(tr: Track, i: number): string {
   const n = langName(tr.lang);

@@ -9,6 +9,8 @@
  */
 import type { Engine, EngineEvents, ErrorCode, OpenOptions, Rect, Track, VideoInfo } from './player';
 import { resumable } from './player';
+import { clampRect, isFull, screenRect } from './rect';
+import { diag, boxOf } from '../diag';
 
 type AvState = 'NONE' | 'IDLE' | 'READY' | 'PLAYING' | 'PAUSED';
 interface AvTrack { index: number; type: 'VIDEO' | 'AUDIO' | 'TEXT' | string; extra_info: string }
@@ -83,17 +85,7 @@ export function tracksOf(list: AvTrack[], type: 'AUDIO' | 'TEXT'): Track[] {
   return out;
 }
 
-/** The stage's rectangle in the TV's 1920 x 1080 video coordinates (the stage is scaled to the window). */
-function screenRect(r: Rect): Rect {
-  const stage = document.getElementById('stage');
-  const box = stage ? stage.getBoundingClientRect() : { left: 0, top: 0, width: 1920 };
-  const k = box.width / 1920 || 1;
-  const toTv = 1920 / (document.documentElement.clientWidth || window.innerWidth || 1920);
-  return {
-    x: Math.round((box.left + r.x * k) * toTv), y: Math.round((box.top + r.y * k) * toTv),
-    w: Math.round(r.w * k * toTv), h: Math.round(r.h * k * toTv),
-  };
-}
+const errName = (e: unknown) => String((e && (e as { name?: string }).name) || e || 'error');
 
 export class AvplayEngine implements Engine {
   readonly name = 'Samsung AVPlay';
@@ -125,11 +117,27 @@ export class AvplayEngine implements Engine {
   }
 
   place(r: Rect): void {
-    this.rect = r;
+    const ok = clampRect(r);
+    if (!ok) { diag('place.refused', { rect: r }); return; }   // no size (a box not laid out yet): keep the last one
+    this.rect = ok;
     this.placeEl();
-    if (this.state() === 'NONE') return;   // applied after open
-    const s = screenRect(r);
-    try { this.av.setDisplayRect(s.x, s.y, s.w, s.h); } catch { /* not in this state */ }
+    if (this.state() === 'NONE') { diag('place.later', { mode: isFull(ok) ? 'FULLSCREEN' : 'PREVIEW', rect: ok }); return; }
+    this.display(isFull(ok) ? 'FULLSCREEN' : 'PREVIEW');
+  }
+
+  /**
+   * The display area, then the display method (letterbox or fill), always as a pair: at open (IDLE), again once
+   * the stream is prepared (READY: the picture's size is known then), on every move, and after the app comes back.
+   * On the TV the live preview stayed black with sound while the full screen showed, and the one difference was
+   * when the area was set: the preview's only before prepare, the full screen's during playback. Hence the call
+   * after prepare (the diagnostics build, tizen/diag.py, shows each call and AVPlay's answer).
+   */
+  private display(why: string): void {
+    const s = clampRect(screenRect(this.rect)) || screenRect(this.rect), st = this.state();
+    let rectOk = true, err = '';
+    try { this.av.setDisplayRect(s.x, s.y, s.w, s.h); } catch (e) { rectOk = false; err = errName(e); }
+    this.applyFill();
+    diag('display', { why, state: st, stage: this.rect, tv: s, ok: rectOk, err, method: this.fill ? 'FULL_SCREEN' : 'LETTER_BOX', object: boxOf(this.el) });
   }
 
   open(url: string, o: OpenOptions, ev: EngineEvents): void {
@@ -145,8 +153,8 @@ export class AvplayEngine implements Engine {
         onbufferingcomplete: live(() => { if (this.state() === 'PAUSED') ev.paused(); else if (this.state() === 'PLAYING') ev.playing(); }),
         onstreamcompleted: live(() => ev.ended()),
         oncurrentplaytime: () => {},
-        onevent: () => {},
-        onerror: (type) => { if (my === this.gen) ev.error(errorCode(type)); },
+        onevent: (type) => { if (my === this.gen) diag('avplay.event', { type: String(type) }); },
+        onerror: (type) => { if (my === this.gen) { diag('avplay.error', { type: String(type) }); ev.error(errorCode(type)); } },
         onsubtitlechange: (duration, text) => { if (my === this.gen && this.textOn) ev.subtitle(String(text || ''), Number(duration) || 3000); },
         ondrmevent: () => {},
       });
@@ -158,19 +166,23 @@ export class AvplayEngine implements Engine {
         } catch { /* the TV keeps its own */ }
       }
       if (o.uhd) { try { av.setStreamingProperty('SET_MODE_4K', 'TRUE'); } catch { /* a stream that isn't 4K */ } }
-      this.place(this.rect);
-      this.applyFill();
+      this.display('open');
       av.prepareAsync(live(() => {
         try { av.setSilentSubtitle(true); } catch { /* no subtitles */ }
+        this.display('prepared');
         ev.ready();
-        const go = live(() => { try { av.play(); ev.playing(); } catch (e) { ev.error(errorCode(e && (e as { name?: string }).name)); } });
+        const go = live(() => {
+          try { av.play(); ev.playing(); } catch (e) { diag('avplay.play.refused', { err: errName(e) }); ev.error(errorCode(e && (e as { name?: string }).name)); }
+          if (__DIAG__) diag('avplay.playing', { state: this.state(), video: this.videoInfo(), stage: this.rect });
+        });
         let d = 0;
         try { d = av.getDuration(); } catch { /* unknown: the point is taken */ }
         if (!o.live && resumable(o.startAt, d)) {
           try { av.seekTo(Math.floor(o.startAt), go, go); } catch { go(); }   // a refused seek starts from the top
         } else go();
-      }), (e) => { if (my === this.gen) ev.error(errorCode(e && ((e as { name?: string }).name || e))); });
+      }), (e) => { if (my === this.gen) { diag('avplay.prepare.failed', { err: errName(e) }); ev.error(errorCode(e && ((e as { name?: string }).name || e))); } });
     } catch (e) {
+      diag('avplay.open.failed', { err: errName(e) });
       ev.error(errorCode(e && (e as { name?: string }).name));
     }
   }
@@ -235,7 +247,11 @@ export class AvplayEngine implements Engine {
   }
 
   suspend(): void { try { this.av.suspend(); } catch { /* nothing open */ } }
-  restore(): boolean { try { this.av.restore(); return true; } catch { return false; } }
+  restore(): boolean {
+    try { this.av.restore(); } catch (e) { diag('avplay.restore.refused', { err: errName(e) }); return false; }
+    this.display('restored');
+    return true;
+  }
 
   release(): void {
     this.gen++;

@@ -13,6 +13,9 @@
  *  - suspends the stream when the app goes to the background and restores it when it comes back;
  *  - keeps the page transparent only where the picture is (the matte), and the TV's screensaver off while playing.
  */
+import { isFull } from './rect';
+import { diag, diagLayers } from '../diag';
+
 export type PState = 'IDLE' | 'PREPARING' | 'READY' | 'PLAYING' | 'PAUSED' | 'BUFFERING' | 'ERROR' | 'ENDED';
 export type ErrorCode = 'unsupported' | 'network' | 'timeout' | 'stream';
 
@@ -144,6 +147,12 @@ export class Player {
   private set(s: PState, info?: { percent?: number; error?: ErrorCode; retrying?: boolean }): void {
     const was = this.st;
     this.st = s;
+    if (__DIAG__ && s !== was) {
+      const r = this.opts ? this.opts.rect : null;
+      diag('state', { from: was, to: s, live: this.live, mode: r ? (isFull(r) ? 'FULLSCREEN' : 'PREVIEW') : null, error: info && info.error, retrying: info && info.retrying });
+      // What the page paints over the picture, once it plays (the matte's window must be clear).
+      if (s === 'PLAYING' && r) { const at = r; setTimeout(() => diag('layers', { rect: at, layers: diagLayers(at) }), 1500); }
+    }
     if (s === 'PLAYING' && was !== 'PLAYING' && !this.playingSince) this.playingSince = Date.now();
     if (s !== 'PREPARING' && s !== 'BUFFERING') this.clearTimer();
     // Buffering: 30 s without progress is a stall (each new percent starts the count again).
@@ -219,7 +228,9 @@ export class Player {
     this.set('ERROR', { error: code });
   }
 
+  /** The one way to move the picture (preview ⇄ full screen): the same stream, only its rectangle changes. */
   place(r: Rect): void {
+    diag('place', { mode: isFull(r) ? 'FULLSCREEN' : 'PREVIEW', rect: r, state: this.st });
     if (this.opts) this.opts = Object.assign({}, this.opts, { rect: r });
     this.engine.place(r);
     if (this.matte && this.st !== 'IDLE') this.matte.show(r);

@@ -1,6 +1,6 @@
 {
   "name": "taha-iptv",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "Taha IPTV: a fast Xtream Codes player for Samsung Tizen TVs (Arabic, right to left).",
   "type": "module",

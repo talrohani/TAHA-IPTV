@@ -3,6 +3,29 @@ import { best, score, type Box } from '../src/core/spatial';
 import { hms } from '../src/core/dom';
 import { normalizeServer } from '../src/screens/login';
 import { digitOf } from '../src/core/keys';
+import { clampRect, isFull, toScreen } from '../src/playback/rect';
+
+describe('video display rectangle', () => {
+  const PREVIEW = { x: 998, y: 138, w: 896, h: 520 };
+  it('is the stage rectangle itself on a 1920 x 1080 page (the AU7000: 1920x1080 @1)', () => {
+    expect(toScreen(PREVIEW, { left: 0, top: 0, width: 1920 }, 1920)).toEqual(PREVIEW);
+  });
+  it('converts through the window, not the panel: a 1280 page with the stage scaled to fit', () => {
+    // Stage scaled to 2/3 in a 1280-wide page: AVPlay still wants 1920 x 1080 numbers (Samsung: × 1920 / clientWidth).
+    expect(toScreen(PREVIEW, { left: 0, top: 0, width: 1280 }, 1280)).toEqual(PREVIEW);
+    // A letterboxed stage (window wider than 16:9) keeps its offset.
+    expect(toScreen({ x: 0, y: 0, w: 1920, h: 1080 }, { left: 120, top: 0, width: 1680 }, 1920)).toEqual({ x: 120, y: 0, w: 1680, h: 945 });
+  });
+  it('refuses a box with no size and keeps a rectangle on the screen', () => {
+    expect(clampRect({ x: 998, y: 138, w: 0, h: 520 })).toBeNull();
+    expect(clampRect({ x: NaN, y: 0, w: 10, h: 10 })).toBeNull();
+    expect(clampRect({ x: 1800, y: 1000, w: 400, h: 200 })).toEqual({ x: 1800, y: 1000, w: 120, h: 80 });
+    expect(clampRect({ x: -10, y: 0, w: 100, h: 50 })).toEqual({ x: 0, y: 0, w: 90, h: 50 });
+    expect(clampRect({ x: 998.4, y: 137.6, w: 895.7, h: 520.2 })).toEqual(PREVIEW);
+    expect(isFull({ x: 0, y: 0, w: 1920, h: 1080 })).toBe(true);
+    expect(isFull(PREVIEW)).toBe(false);
+  });
+});
 
 describe('remote keys', () => {
   it('reads number keys, and never takes ↓ (down) for one', () => {

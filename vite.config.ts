@@ -23,7 +23,11 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 export default defineConfig({
   base: './',
   // One version for everything: package.json → the app (Settings) and the .wgt manifest (tizen/package.py).
-  define: { __APP_VERSION__: JSON.stringify(pkg.version), __PERF__: JSON.stringify(process.env.TAHA_PERF === '1') },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __PERF__: JSON.stringify(process.env.TAHA_PERF === '1'),
+    __DIAG__: JSON.stringify(process.env.TAHA_DIAG === '1'),
+  },
   plugins: [classicScript()],
   build: {
     target: ['es2019', 'chrome76'],

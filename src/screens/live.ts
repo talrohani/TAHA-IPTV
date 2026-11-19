@@ -14,8 +14,11 @@ import { isFavorite, toggleFavorite, record, favorites, recent } from '../data/l
 import type { Screen } from '../core/router';
 import type { Category, Channel, Program } from '../data/types';
 import type { Key } from '../core/keys';
+import type { Rect } from '../playback/player';
+import { stageRectOf } from '../playback/rect';
 
-const PREVIEW = { x: 998, y: 138, w: 896, h: 520 };
+/** The preview box as laid out by screens.css (.live .side, .preview); its measured box is used when it has one. */
+const PREVIEW_CSS: Rect = { x: 998, y: 138, w: 896, h: 520 };
 /** The two categories that are yours, not the provider's. */
 const FAV = '~fav', RECENT = '~recent';
 
@@ -181,12 +184,15 @@ export function live(params?: Record<string, unknown>): Screen {
 
   function hm(ms: number): string { const d = new Date(ms); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
 
+  /** Where the picture goes in the preview: the box as it is on screen now (the CSS numbers until it is laid out). */
+  function previewRect(): Rect { return stageRectOf(preview) || PREVIEW_CSS; }
+
   function pick(c: Channel): void {
     if (playing && playing.id === c.id) { full(c); return; }
     playing = c;
     preview.classList.add('on');
     pMsg.textContent = t('loading');
-    app.player.play(app.source.streamUrl(c), { rect: PREVIEW, live: true });
+    app.player.play(app.source.streamUrl(c), { rect: previewRect(), live: true });
     record(c, 0, 0);
   }
 
@@ -255,7 +261,7 @@ export function live(params?: Record<string, unknown>): Screen {
     },
     resume() {
       // Back from the full screen: the picture goes back into the preview.
-      if (playing) app.player.place(PREVIEW);
+      if (playing) app.player.place(previewRect());
       chans.refresh();
     },
     destroy() {

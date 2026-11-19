@@ -261,8 +261,30 @@ describe('AVPlay engine', () => {
       'setStreamingProperty(SET_MODE_4K,TRUE)', 'setDisplayRect(998,138,896,520)',
       'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)', 'prepareAsync']);
     f.prepare()!.ok();
-    expect(f.calls.slice(-3)).toEqual(['setSilentSubtitle(true)', 'seekTo(61000)', 'play']);
+    // Once prepared, the display area and method again (the preview's area set only before prepare stayed black).
+    expect(f.calls.slice(-5)).toEqual(['setSilentSubtitle(true)', 'setDisplayRect(998,138,896,520)',
+      'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)', 'seekTo(61000)', 'play']);
     expect(log).toEqual(['ready', 'playing']);
+  });
+
+  it('moves the picture between the preview and the full screen without reopening the stream', () => {
+    const f = fakeAv(), log: string[] = [], e = new AvplayEngine(f.av);
+    const PREVIEW = { x: 998, y: 138, w: 896, h: 520 };
+    e.place(PREVIEW);
+    e.open('live', { startAt: 0, live: true, buffer: 'auto', uhd: false }, events(log));
+    f.prepare()!.ok();
+    f.calls.length = 0;
+    e.place({ x: 0, y: 0, w: 1920, h: 1080 });
+    e.place(PREVIEW);
+    expect(f.calls).toEqual(['setDisplayRect(0,0,1920,1080)', 'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)',
+      'setDisplayRect(998,138,896,520)', 'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)']);
+    // A box with no size yet (not laid out) is refused: the picture stays where it was.
+    e.place({ x: 998, y: 138, w: 0, h: 0 });
+    expect(f.calls.length).toBe(4);
+    // Back from the background: restored, and its area set again.
+    e.restore();
+    expect(f.calls.slice(-3)).toEqual(['restore', 'setDisplayRect(998,138,896,520)', 'setDisplayMethod(PLAYER_DISPLAY_MODE_LETTER_BOX)']);
+    expect(f.calls).not.toContain('open');
   });
 
   it('starts a live channel at once (no seek), and reports no length for it', () => {
